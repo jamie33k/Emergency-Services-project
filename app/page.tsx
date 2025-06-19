@@ -1,112 +1,92 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+"use client"
 
-export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-red-600">EmergencyConnect</h1>
-            <nav className="space-x-4">
-              <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-                Login
-              </Link>
-              <Link href="/register" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-                Register
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+import { useState } from "react"
+import Login from "../components/login"
+import EmergencyServices from "../emergency-services"
+import ResponderDashboard from "../components/responder-dashboard"
+import type { User, EmergencyRequest } from "../types/emergency"
 
-      <main className="container mx-auto px-4 py-12">
-        <section className="mb-16 text-center">
-          <h2 className="mb-4 text-4xl font-bold text-gray-900">Emergency Services Platform</h2>
-          <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-600">
-            Connecting those in need with emergency service providers quickly and efficiently.
-          </p>
+export default function EmergencyApp() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [requests, setRequests] = useState<EmergencyRequest[]>([])
+  const [activeRequest, setActiveRequest] = useState<EmergencyRequest | null>(null)
 
-          <div className="flex justify-center gap-4 mb-12">
-            <Link href="/client">
-              <Button size="lg" className="bg-red-600 hover:bg-red-700">
-                I Need Help
-              </Button>
-            </Link>
-            <Link href="/provider">
-              <Button size="lg" variant="outline" className="border-red-600 text-red-600 hover:bg-red-50">
-                Service Provider Login
-              </Button>
-            </Link>
-          </div>
+  const handleLogin = (user: User) => {
+    setCurrentUser(user)
+  }
 
-          <div className="grid gap-8 md:grid-cols-3">
-            <ServiceCard
-              title="Medical Emergency"
-              description="Request an ambulance for medical emergencies"
-              image="/placeholder.svg?height=200&width=300"
-              color="red"
-              href="/client?service=medical"
-              buttonText="Request Ambulance"
-            />
+  const handleLogout = () => {
+    setCurrentUser(null)
+    setActiveRequest(null)
+  }
 
-            <ServiceCard
-              title="Police Assistance"
-              description="Request police help for security emergencies"
-              image="/placeholder.svg?height=200&width=300"
-              color="blue"
-              href="/client?service=police"
-              buttonText="Request Police"
-            />
+  const handleCreateRequest = (requestData: Partial<EmergencyRequest>) => {
+    const newRequest: EmergencyRequest = {
+      id: Math.random().toString(36).substr(2, 9),
+      clientId: requestData.clientId || "",
+      clientName: requestData.clientName || "",
+      clientPhone: requestData.clientPhone || "",
+      serviceType: requestData.serviceType!,
+      location: requestData.location!,
+      description: requestData.description || "",
+      status: "pending",
+      createdAt: new Date(),
+      priority: requestData.priority || "medium",
+    }
 
-            <ServiceCard
-              title="Fire Emergency"
-              description="Request fire brigade for fire emergencies"
-              image="/placeholder.svg?height=200&width=300"
-              color="orange"
-              href="/client?service=fire"
-              buttonText="Request Fire Brigade"
-            />
-          </div>
-        </section>
-      </main>
+    setRequests((prev) => [...prev, newRequest])
+    setActiveRequest(newRequest)
+  }
 
-      <footer className="bg-gray-100 py-8">
-        <div className="container mx-auto px-4 text-center text-gray-600">
-          <p>© 2025 EmergencyConnect. All rights reserved.</p>
-          <p className="mt-2 text-sm">This is a simplified demonstration system.</p>
-        </div>
-      </footer>
-    </div>
-  )
-}
+  const handleUpdateRequest = (requestId: string, status: EmergencyRequest["status"]) => {
+    setRequests((prev) =>
+      prev.map((req) => {
+        if (req.id === requestId) {
+          const updatedRequest = {
+            ...req,
+            status,
+            responderId: status === "active" ? currentUser?.id : req.responderId,
+            responderName: status === "active" ? currentUser?.name : req.responderName,
+            responderPhone: status === "active" ? currentUser?.phone : req.responderPhone,
+            acceptedAt: status === "active" ? new Date() : req.acceptedAt,
+            completedAt: status === "completed" ? new Date() : req.completedAt,
+            estimatedArrival: status === "active" ? "8 minutes" : req.estimatedArrival,
+            responderLocation: status === "active" ? { lat: -1.2841, lng: 36.8155 } : req.responderLocation,
+          }
 
-function ServiceCard({ title, description, image, color, href, buttonText }) {
-  const bgColor = `bg-${color}-600`
-  const hoverColor = `hover:bg-${color}-700`
+          // Update active request if it's the current user's request
+          if (req.clientId === currentUser?.id) {
+            setActiveRequest(status === "completed" ? null : updatedRequest)
+          }
+
+          return updatedRequest
+        }
+        return req
+      }),
+    )
+  }
+
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} />
+  }
+
+  if (currentUser.role === "responder") {
+    return (
+      <ResponderDashboard
+        user={currentUser}
+        onLogout={handleLogout}
+        requests={requests}
+        onUpdateRequest={handleUpdateRequest}
+      />
+    )
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="relative h-48 w-full overflow-hidden">
-          <img
-            src={image || "/placeholder.svg"}
-            alt={title}
-            className="h-full w-full object-cover transition-transform hover:scale-105"
-          />
-          <div className={`absolute inset-0 bg-gradient-to-t from-${color}-600/70 to-transparent`}></div>
-        </div>
-      </CardContent>
-      <CardFooter className="mt-4">
-        <Link href={href} className="w-full">
-          <Button className={`w-full ${bgColor} ${hoverColor}`}>{buttonText}</Button>
-        </Link>
-      </CardFooter>
-    </Card>
+    <EmergencyServices
+      user={currentUser}
+      onLogout={handleLogout}
+      onCreateRequest={handleCreateRequest}
+      activeRequest={activeRequest}
+    />
   )
 }
