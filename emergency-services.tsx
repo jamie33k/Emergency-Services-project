@@ -1,10 +1,50 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Phone, MapPin, Clock, Users, AlertTriangle } from "lucide-react"
+import { Phone, MapPin, Clock, Users, AlertTriangle, LogOut } from "lucide-react"
 import Image from "next/image"
+import MapView from "./components/map-view"
+import type { User } from "./types/emergency"
+import { useState } from "react"
 
-export default function EmergencyServices() {
+interface EmergencyServicesProps {
+  user?: User
+  onLogout?: () => void
+}
+
+export default function EmergencyServices({ user, onLogout }: EmergencyServicesProps) {
+  const [isTracking, setIsTracking] = useState(false)
+  const [responderInfo, setResponderInfo] = useState<any>(null)
+
+  // Mock current location
+  const [currentLocation] = useState({
+    lat: -1.2921,
+    lng: 36.8219,
+    address: "Nairobi CBD, Kenya",
+  })
+
+  const handleEmergencyCall = (serviceType: string) => {
+    setIsTracking(true)
+    // Simulate responder assignment after 3 seconds
+    setTimeout(() => {
+      setResponderInfo({
+        lat: -1.2841,
+        lng: 36.8155,
+        name:
+          serviceType === "fire"
+            ? "Fire Station 1"
+            : serviceType === "police"
+              ? "Officer John Smith"
+              : "Paramedic Team A",
+        phone: "+254798578853",
+        serviceType,
+        eta: "6 minutes",
+      })
+    }, 3000)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-blue-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -16,6 +56,15 @@ export default function EmergencyServices() {
             <AlertTriangle className="w-4 h-4 mr-1" />
             Emergency Hotline: 911
           </Badge>
+          {user && (
+            <div className="flex items-center gap-4 mt-4">
+              <span className="text-sm text-gray-600">Welcome, {user.name}</span>
+              <Button variant="outline" size="sm" onClick={onLogout}>
+                <LogOut className="w-4 h-4 mr-1" />
+                Logout
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Emergency Services Grid */}
@@ -187,19 +236,31 @@ export default function EmergencyServices() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button size="lg" className="bg-red-600 hover:bg-red-700 h-16">
+              <Button
+                size="lg"
+                className="bg-red-600 hover:bg-red-700 h-16"
+                onClick={() => handleEmergencyCall("fire")}
+              >
                 <div className="text-center">
                   <div className="text-lg font-bold">FIRE</div>
                   <div className="text-sm">Press for Fire Emergency</div>
                 </div>
               </Button>
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 h-16">
+              <Button
+                size="lg"
+                className="bg-blue-600 hover:bg-blue-700 h-16"
+                onClick={() => handleEmergencyCall("police")}
+              >
                 <div className="text-center">
                   <div className="text-lg font-bold">POLICE</div>
                   <div className="text-sm">Press for Police Help</div>
                 </div>
               </Button>
-              <Button size="lg" className="bg-green-600 hover:bg-green-700 h-16">
+              <Button
+                size="lg"
+                className="bg-green-600 hover:bg-green-700 h-16"
+                onClick={() => handleEmergencyCall("medical")}
+              >
                 <div className="text-center">
                   <div className="text-lg font-bold">MEDICAL</div>
                   <div className="text-sm">Press for Medical Emergency</div>
@@ -208,6 +269,13 @@ export default function EmergencyServices() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Real-Time Map View */}
+        {user && (
+          <div className="mt-8">
+            <MapView userLocation={currentLocation} responderLocation={responderInfo} isTracking={isTracking} />
+          </div>
+        )}
       </div>
     </div>
   )
