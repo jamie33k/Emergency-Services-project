@@ -1,24 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { updateRequestStatus } from "@/lib/db"
+import { updateEmergencyRequest } from "@/lib/db"
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const body = await request.json()
-    const { status, responder_data } = body
+    const requestId = params.id
+    const updates = await request.json()
 
-    if (!status) {
-      return NextResponse.json({ success: false, message: "Status is required" }, { status: 400 })
+    if (!requestId) {
+      return NextResponse.json({ error: "Request ID is required" }, { status: 400 })
     }
 
-    const updatedRequest = await updateRequestStatus(params.id, status, responder_data)
+    const result = await updateEmergencyRequest(requestId, updates)
 
-    if (!updatedRequest) {
-      return NextResponse.json({ success: false, message: "Request not found" }, { status: 404 })
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        request: result.request,
+        message: "Request updated successfully",
+      })
+    } else {
+      return NextResponse.json({ error: result.error || "Failed to update request" }, { status: 500 })
     }
-
-    return NextResponse.json({ success: true, data: updatedRequest })
   } catch (error) {
-    console.error("Failed to update request status:", error)
-    return NextResponse.json({ success: false, message: "Failed to update request" }, { status: 500 })
+    console.error("Update emergency request error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

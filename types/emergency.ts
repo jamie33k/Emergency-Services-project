@@ -1,61 +1,78 @@
 export interface User {
   id: string
   name: string
+  username: string
   phone: string
-  username?: string
+  password?: string
   role: "client" | "responder"
-  serviceType?: "fire" | "police" | "medical"
-  status?: "available" | "busy" | "offline"
-  currentLocation?: {
-    lat: number
-    lng: number
-  }
-  createdAt?: Date
-  updatedAt?: Date
+  service_type?: "fire" | "police" | "medical" | null
+  status: "available" | "busy" | "offline"
+  current_location_lat?: number
+  current_location_lng?: number
+  created_at: Date
+  updated_at: Date
 }
 
 export interface EmergencyRequest {
   id: string
-  clientId: string
-  clientName: string
-  clientPhone: string
-  serviceType: "fire" | "police" | "medical"
-  location: {
-    lat: number
-    lng: number
-    address?: string
-  }
+  client_id: string
+  client_name: string
+  client_phone: string
+  service_type: "fire" | "police" | "medical"
+  location_lat: number
+  location_lng: number
+  location_address?: string
   description: string
   status: "pending" | "active" | "completed" | "declined"
-  priority?: "low" | "medium" | "high" | "critical"
-  responderId?: string
-  responderName?: string
-  responderPhone?: string
-  responderLocation?: {
-    lat: number
-    lng: number
-  }
-  estimatedArrival?: string
-  createdAt: Date
-  acceptedAt?: Date
-  completedAt?: Date
+  priority: "low" | "medium" | "high" | "critical"
+  responder_id?: string
+  responder_name?: string
+  responder_phone?: string
+  responder_location_lat?: number
+  responder_location_lng?: number
+  estimated_arrival?: string
+  created_at: Date
+  accepted_at?: Date
+  completed_at?: Date
+  updated_at: Date
 }
 
 export interface EmergencyContact {
   id: string
   name: string
   phone: string
-  serviceType: "fire" | "police" | "medical"
+  service_type: "fire" | "police" | "medical"
   location?: string
-  isActive: boolean
-  createdAt: Date
+  is_active: boolean
+  created_at: Date
 }
 
 export interface RequestStatusHistory {
   id: string
-  requestId: string
-  status: EmergencyRequest["status"]
-  changedBy?: string
+  request_id: string
+  status: string
+  changed_by?: string
   notes?: string
-  createdAt: Date
+  created_at: Date
+}
+
+export interface Location {
+  lat: number
+  lng: number
+  address?: string
+}
+
+export interface Responder {
+  id: string
+  name: string
+  phone: string
+  service_type: "fire" | "police" | "medical"
+  location: Location
+  status: "available" | "busy" | "offline"
+  current_requests: number
+}
+
+export interface LoginCredentials {
+  phone: string
+  role: "client" | "responder"
 }

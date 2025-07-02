@@ -1,20 +1,19 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, User, Lock, Sun, Moon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Phone, Lock, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
-import type { User as UserType } from "../types/emergency"
+import type { User } from "../types/emergency"
 
 interface LoginProps {
-  onLogin: (user: UserType) => void
+  onLogin: (user: User) => void
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -24,7 +23,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
@@ -35,20 +34,18 @@ export default function Login({ onLogin }: LoginProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          identifier: identifier.trim(),
-          password: password.trim(),
-        }),
+        body: JSON.stringify({ identifier, password }),
       })
 
       const data = await response.json()
 
-      if (response.ok) {
+      if (response.ok && data.user) {
         onLogin(data.user)
       } else {
-        setError(data.error || "Login failed")
+        setError(data.error || "Login failed. Please check your credentials.")
       }
-    } catch (err) {
+    } catch (error) {
+      console.error("Login error:", error)
       setError("Network error. Please try again.")
     } finally {
       setIsLoading(false)
@@ -64,7 +61,7 @@ export default function Login({ onLogin }: LoginProps) {
             <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
               <span className="text-white font-bold">E</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">EmergencyConnect</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Huduma Emergency Services</h1>
           </div>
           <Badge variant="destructive" className="bg-red-600 hover:bg-red-700">
             🚨 Emergency Hotline: 020-2222-181
@@ -94,13 +91,13 @@ export default function Login({ onLogin }: LoginProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="identifier" className="text-gray-700 dark:text-gray-300">
                   Username or Phone Number
                 </Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
                     id="identifier"
                     type="text"

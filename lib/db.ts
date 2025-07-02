@@ -1,52 +1,64 @@
 import { neon } from "@neondatabase/serverless"
 
-// Database connection with fallback
-const getDatabaseConnection = () => {
+// Database connection
+let sql: any = null
+
+try {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL
 
-  if (!connectionString) {
-    console.warn("No database connection string found. Using mock data.")
-    return null
+  if (connectionString) {
+    sql = neon(connectionString)
+    console.log("✅ Database connection established")
+  } else {
+    console.warn("⚠️ No database connection string found. Using mock data.")
   }
-
-  try {
-    return neon(connectionString)
-  } catch (error) {
-    console.error("Failed to connect to database:", error)
-    return null
-  }
+} catch (error) {
+  console.error("❌ Database connection failed:", error)
+  sql = null
 }
-
-const sql = getDatabaseConnection()
 
 // Mock data for fallback
 const mockUsers = [
+  // Clients
   {
-    id: "1",
+    id: "client-1",
     name: "Peter Njiru",
     username: "PeterNjiru",
     phone: "+254798578853",
     password: "PeterNjiru",
     role: "client",
+    service_type: null,
+    status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
   {
-    id: "2",
+    id: "client-2",
     name: "Micheal Wekesa",
     username: "MichealWekesa",
     phone: "+254798578854",
     password: "MichealWekesa",
     role: "client",
+    service_type: null,
+    status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
   {
-    id: "3",
+    id: "client-3",
     name: "Teejan Amusala",
     username: "TeejanAmusala",
     phone: "+254798578855",
     password: "TeejanAmusala",
     role: "client",
+    service_type: null,
+    status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
+  // Responders
   {
-    id: "4",
+    id: "responder-1",
     name: "Mark Maina",
     username: "MarkMaina",
     phone: "+254700123456",
@@ -54,9 +66,11 @@ const mockUsers = [
     role: "responder",
     service_type: "fire",
     status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
   {
-    id: "5",
+    id: "responder-2",
     name: "Sasha Munene",
     username: "SashaMunene",
     phone: "+254700789012",
@@ -64,9 +78,11 @@ const mockUsers = [
     role: "responder",
     service_type: "police",
     status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
   {
-    id: "6",
+    id: "responder-3",
     name: "Ali Hassan",
     username: "AliHassan",
     phone: "+254700345678",
@@ -74,290 +90,164 @@ const mockUsers = [
     role: "responder",
     service_type: "medical",
     status: "available",
+    created_at: new Date(),
+    updated_at: new Date(),
   },
 ]
 
-const mockRequests = [
-  {
-    id: "1",
-    client_id: "1",
-    client_name: "Peter Njiru",
-    client_phone: "+254798578853",
-    service_type: "medical",
-    location_lat: -1.2921,
-    location_lng: 36.8219,
-    location_address: "Westlands, Nairobi",
-    description: "Chest pain and difficulty breathing",
-    status: "active",
-    priority: "high",
-    responder_id: "6",
-    responder_name: "Ali Hassan",
-    responder_phone: "+254700345678",
-    estimated_arrival: "8 minutes",
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    client_id: "2",
-    client_name: "Micheal Wekesa",
-    client_phone: "+254798578854",
-    service_type: "fire",
-    location_lat: -1.2864,
-    location_lng: 36.8172,
-    location_address: "Karen, Nairobi",
-    description: "Kitchen fire in apartment building",
-    status: "pending",
-    priority: "critical",
-    responder_id: null,
-    responder_name: null,
-    responder_phone: null,
-    estimated_arrival: null,
-    created_at: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
-  },
-]
+const mockEmergencyRequests: any[] = []
 
-// Check if database tables exist
-async function checkDatabaseTables() {
-  if (!sql) return false
-
-  try {
-    await sql`SELECT 1 FROM users LIMIT 1`
-    return true
-  } catch (error) {
-    console.warn("Database tables not found, using mock data:", error.message)
-    return false
-  }
-}
-
-// Authentication function - supports both username and phone
+// Database functions
 export async function authenticateUser(identifier: string, password: string) {
-  // Check if database is available and tables exist
-  const dbAvailable = await checkDatabaseTables()
-
-  if (!dbAvailable) {
-    console.log("Using mock authentication")
-    const user = mockUsers.find((u) => (u.phone === identifier || u.username === identifier) && u.password === password)
-    return user || null
-  }
-
   try {
-    const result = await sql`
-      SELECT id, name, username, phone, role, service_type, status
-      FROM users 
-      WHERE (phone = ${identifier} OR username = ${identifier}) AND password = ${password}
-      LIMIT 1
-    `
-    return result[0] || null
-  } catch (error) {
-    console.error("Authentication failed:", error)
-    // Fallback to mock data if database query fails
-    const user = mockUsers.find((u) => (u.phone === identifier || u.username === identifier) && u.password === password)
-    return user || null
-  }
-}
-
-// Get user by ID
-export async function getUserById(id: string) {
-  const dbAvailable = await checkDatabaseTables()
-
-  if (!dbAvailable) {
-    return mockUsers.find((u) => u.id === id) || null
-  }
-
-  try {
-    const result = await sql`
-      SELECT id, name, username, phone, role, service_type, status,
-             current_location_lat, current_location_lng
-      FROM users 
-      WHERE id = ${id}
-      LIMIT 1
-    `
-    return result[0] || null
-  } catch (error) {
-    console.error("Failed to get user:", error)
-    return mockUsers.find((u) => u.id === id) || null
-  }
-}
-
-// Get emergency requests
-export async function getEmergencyRequests(status?: string) {
-  const dbAvailable = await checkDatabaseTables()
-
-  if (!dbAvailable) {
-    console.log("Using mock data for emergency requests")
-    return status ? mockRequests.filter((r) => r.status === status) : mockRequests
-  }
-
-  try {
-    let query
-    if (status) {
-      query = sql`
-        SELECT * FROM emergency_requests 
-        WHERE status = ${status}
-        ORDER BY created_at DESC
+    if (sql) {
+      // Try database first
+      const result = await sql`
+        SELECT * FROM users 
+        WHERE (username = ${identifier} OR phone = ${identifier}) 
+        AND password = ${password}
+        LIMIT 1
       `
-    } else {
-      query = sql`
-        SELECT * FROM emergency_requests 
-        ORDER BY created_at DESC
-      `
+
+      if (result.length > 0) {
+        return { success: true, user: result[0] }
+      }
     }
-    const result = await query
-    return result
   } catch (error) {
-    console.error("Database query failed:", error)
-    return status ? mockRequests.filter((r) => r.status === status) : mockRequests
+    console.warn("Database authentication failed, using mock data:", error)
   }
+
+  // Fallback to mock data
+  const user = mockUsers.find((u) => (u.username === identifier || u.phone === identifier) && u.password === password)
+
+  if (user) {
+    return { success: true, user }
+  }
+
+  return { success: false, error: "Invalid credentials" }
 }
 
-// Create emergency request
-export async function createEmergencyRequest(data: {
-  client_id: string
-  client_name: string
-  client_phone: string
-  service_type: string
-  location_lat: number
-  location_lng: number
-  location_address?: string
-  description: string
-  priority?: string
-}) {
-  const dbAvailable = await checkDatabaseTables()
+export async function createEmergencyRequest(requestData: any) {
+  try {
+    if (sql) {
+      // Try database first
+      const result = await sql`
+        INSERT INTO emergency_requests (
+          client_id, client_name, client_phone, service_type,
+          location_lat, location_lng, location_address, description,
+          status, priority, created_at
+        ) VALUES (
+          ${requestData.clientId}, ${requestData.clientName}, ${requestData.clientPhone},
+          ${requestData.serviceType}, ${requestData.location.lat}, ${requestData.location.lng},
+          ${requestData.location.address}, ${requestData.description},
+          ${requestData.status || "pending"}, ${requestData.priority || "medium"},
+          NOW()
+        )
+        RETURNING *
+      `
 
-  if (!dbAvailable) {
-    console.log("Using mock data - request would be created")
-    const newRequest = {
-      id: Date.now().toString(),
-      ...data,
-      status: "pending",
-      priority: data.priority || "medium",
-      responder_id: null,
-      responder_name: null,
-      responder_phone: null,
-      estimated_arrival: null,
-      created_at: new Date().toISOString(),
+      if (result.length > 0) {
+        return { success: true, request: result[0] }
+      }
     }
-    mockRequests.unshift(newRequest)
-    return newRequest
+  } catch (error) {
+    console.warn("Database request creation failed, using mock data:", error)
   }
 
+  // Fallback to mock data
+  const newRequest = {
+    id: `req-${Date.now()}`,
+    ...requestData,
+    status: requestData.status || "pending",
+    priority: requestData.priority || "medium",
+    created_at: new Date(),
+    updated_at: new Date(),
+  }
+
+  mockEmergencyRequests.push(newRequest)
+  return { success: true, request: newRequest }
+}
+
+export async function getEmergencyRequests(filters: any = {}) {
   try {
-    const result = await sql`
-      INSERT INTO emergency_requests (
-        client_id, client_name, client_phone, service_type, 
-        location_lat, location_lng, location_address, 
-        description, priority, status
-      ) VALUES (
-        ${data.client_id}, ${data.client_name}, ${data.client_phone}, ${data.service_type},
-        ${data.location_lat}, ${data.location_lng}, ${data.location_address || ""},
-        ${data.description}, ${data.priority || "medium"}, 'pending'
+    if (sql) {
+      // Try database first
+      let query = "SELECT * FROM emergency_requests WHERE 1=1"
+      const params: any[] = []
+
+      if (filters.status) {
+        query += ` AND status = $${params.length + 1}`
+        params.push(filters.status)
+      }
+
+      if (filters.service_type) {
+        query += ` AND service_type = $${params.length + 1}`
+        params.push(filters.service_type)
+      }
+
+      query += " ORDER BY created_at DESC"
+
+      const result = await sql(query, params)
+      return { success: true, requests: result }
+    }
+  } catch (error) {
+    console.warn("Database query failed, using mock data:", error)
+  }
+
+  // Fallback to mock data
+  let filteredRequests = [...mockEmergencyRequests]
+
+  if (filters.status) {
+    filteredRequests = filteredRequests.filter((r) => r.status === filters.status)
+  }
+
+  if (filters.service_type) {
+    filteredRequests = filteredRequests.filter((r) => r.service_type === filters.service_type)
+  }
+
+  return { success: true, requests: filteredRequests }
+}
+
+export async function updateEmergencyRequest(requestId: string, updates: any) {
+  try {
+    if (sql) {
+      // Try database first
+      const setClause = Object.keys(updates)
+        .map((key, index) => `${key} = $${index + 2}`)
+        .join(", ")
+
+      const values = [requestId, ...Object.values(updates)]
+
+      const result = await sql(
+        `UPDATE emergency_requests SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        values,
       )
-      RETURNING *
-    `
-    return result[0]
-  } catch (error) {
-    console.error("Failed to create emergency request:", error)
-    // Fallback to mock data
-    const newRequest = {
-      id: Date.now().toString(),
-      ...data,
-      status: "pending",
-      priority: data.priority || "medium",
-      responder_id: null,
-      responder_name: null,
-      responder_phone: null,
-      estimated_arrival: null,
-      created_at: new Date().toISOString(),
-    }
-    mockRequests.unshift(newRequest)
-    return newRequest
-  }
-}
 
-// Update request status
-export async function updateRequestStatus(
-  id: string,
-  status: string,
-  responder_data?: {
-    responder_id: string
-    responder_name: string
-    responder_phone: string
-    estimated_arrival: string
-  },
-) {
-  const dbAvailable = await checkDatabaseTables()
-
-  if (!dbAvailable) {
-    console.log("Using mock data - status would be updated")
-    const request = mockRequests.find((r) => r.id === id)
-    if (request) {
-      request.status = status
-      if (responder_data) {
-        Object.assign(request, responder_data)
+      if (result.length > 0) {
+        return { success: true, request: result[0] }
       }
     }
-    return request
+  } catch (error) {
+    console.warn("Database update failed, using mock data:", error)
   }
 
-  try {
-    const result = await sql`
-      UPDATE emergency_requests 
-      SET 
-        status = ${status},
-        responder_id = ${responder_data?.responder_id || null},
-        responder_name = ${responder_data?.responder_name || null},
-        responder_phone = ${responder_data?.responder_phone || null},
-        estimated_arrival = ${responder_data?.estimated_arrival || null},
-        accepted_at = ${status === "active" ? new Date().toISOString() : null},
-        completed_at = ${status === "completed" ? new Date().toISOString() : null}
-      WHERE id = ${id}
-      RETURNING *
-    `
-    return result[0]
-  } catch (error) {
-    console.error("Failed to update request status:", error)
-    // Fallback to mock data
-    const request = mockRequests.find((r) => r.id === id)
-    if (request) {
-      request.status = status
-      if (responder_data) {
-        Object.assign(request, responder_data)
-      }
+  // Fallback to mock data
+  const requestIndex = mockEmergencyRequests.findIndex((r) => r.id === requestId)
+  if (requestIndex !== -1) {
+    mockEmergencyRequests[requestIndex] = {
+      ...mockEmergencyRequests[requestIndex],
+      ...updates,
+      updated_at: new Date(),
     }
-    return request
+    return { success: true, request: mockEmergencyRequests[requestIndex] }
   }
+
+  return { success: false, error: "Request not found" }
 }
 
-// Get available responders by service type
-export async function getAvailableResponders(serviceType: string) {
-  const dbAvailable = await checkDatabaseTables()
-
-  if (!dbAvailable) {
-    return mockUsers.filter((u) => u.role === "responder" && u.service_type === serviceType)
-  }
-
-  try {
-    const result = await sql`
-      SELECT id, name, username, phone, service_type, status,
-             current_location_lat, current_location_lng
-      FROM users 
-      WHERE role = 'responder' 
-        AND service_type = ${serviceType}
-        AND status = 'available'
-      ORDER BY name
-    `
-    return result
-  } catch (error) {
-    console.error("Failed to get responders:", error)
-    return mockUsers.filter((u) => u.role === "responder" && u.service_type === serviceType)
-  }
-}
-
-// Initialize database tables (for development)
 export async function initializeDatabase() {
   if (!sql) {
-    console.log("No database connection available")
-    return false
+    return { success: false, error: "No database connection available" }
   }
 
   try {
@@ -383,7 +273,7 @@ export async function initializeDatabase() {
     await sql`
       CREATE TABLE IF NOT EXISTS emergency_requests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        client_id UUID NOT NULL,
+        client_id VARCHAR(100) NOT NULL,
         client_name VARCHAR(100) NOT NULL,
         client_phone VARCHAR(20) NOT NULL,
         service_type VARCHAR(20) NOT NULL CHECK (service_type IN ('fire', 'police', 'medical')),
@@ -393,7 +283,7 @@ export async function initializeDatabase() {
         description TEXT NOT NULL,
         status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'declined')),
         priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
-        responder_id UUID,
+        responder_id VARCHAR(100),
         responder_name VARCHAR(100),
         responder_phone VARCHAR(20),
         responder_location_lat DECIMAL(10, 8),
@@ -401,26 +291,23 @@ export async function initializeDatabase() {
         estimated_arrival VARCHAR(50),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         accepted_at TIMESTAMP WITH TIME ZONE,
-        completed_at TIMESTAMP WITH TIME ZONE
+        completed_at TIMESTAMP WITH TIME ZONE,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `
 
-    // Insert sample users with username as password
-    await sql`
-      INSERT INTO users (name, username, phone, password, role, service_type, status) VALUES
-      ('Peter Njiru', 'PeterNjiru', '+254798578853', 'PeterNjiru', 'client', NULL, NULL),
-      ('Micheal Wekesa', 'MichealWekesa', '+254798578854', 'MichealWekesa', 'client', NULL, NULL),
-      ('Teejan Amusala', 'TeejanAmusala', '+254798578855', 'TeejanAmusala', 'client', NULL, NULL),
-      ('Mark Maina', 'MarkMaina', '+254700123456', 'MarkMaina', 'responder', 'fire', 'available'),
-      ('Sasha Munene', 'SashaMunene', '+254700789012', 'SashaMunene', 'responder', 'police', 'available'),
-      ('Ali Hassan', 'AliHassan', '+254700345678', 'AliHassan', 'responder', 'medical', 'available')
-      ON CONFLICT (username) DO NOTHING
-    `
+    // Insert sample users
+    for (const user of mockUsers) {
+      await sql`
+        INSERT INTO users (name, username, phone, password, role, service_type, status)
+        VALUES (${user.name}, ${user.username}, ${user.phone}, ${user.password}, ${user.role}, ${user.service_type}, ${user.status})
+        ON CONFLICT (username) DO NOTHING
+      `
+    }
 
-    console.log("Database initialized successfully")
-    return true
+    return { success: true, message: "Database initialized successfully" }
   } catch (error) {
-    console.error("Failed to initialize database:", error)
-    return false
+    console.error("Database initialization failed:", error)
+    return { success: false, error: error.message }
   }
 }
