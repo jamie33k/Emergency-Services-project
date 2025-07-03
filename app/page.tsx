@@ -1,92 +1,96 @@
 "use client"
 
-import { useState } from "react"
-import Login from "../components/login"
+import { useState, useEffect } from "react"
+import { ThemeProvider } from "@/components/theme-provider"
+import Login from "@/components/login"
 import EmergencyServices from "../emergency-services"
-import ResponderDashboard from "../components/responder-dashboard"
+import ResponderDashboard from "@/components/responder-dashboard"
 import type { User, EmergencyRequest } from "../types/emergency"
 
-export default function EmergencyApp() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [requests, setRequests] = useState<EmergencyRequest[]>([])
+export default function Home() {
+  const [user, setUser] = useState<User | null>(null)
   const [activeRequest, setActiveRequest] = useState<EmergencyRequest | null>(null)
 
-  const handleLogin = (user: User) => {
-    setCurrentUser(user)
+  // Initialize database on first load
+  useEffect(() => {
+    const initDB = async () => {
+      try {
+        await fetch("/api/init-db")
+      } catch (error) {
+        console.error("Failed to initialize database:", error)
+      }
+    }
+    initDB()
+  }, [])
+
+  const handleLogin = (userData: User) => {
+    setUser(userData)
   }
 
   const handleLogout = () => {
-    setCurrentUser(null)
+    setUser(null)
     setActiveRequest(null)
   }
 
-  const handleCreateRequest = (requestData: Partial<EmergencyRequest>) => {
-    const newRequest: EmergencyRequest = {
-      id: Math.random().toString(36).substr(2, 9),
-      clientId: requestData.clientId || "",
-      clientName: requestData.clientName || "",
-      clientPhone: requestData.clientPhone || "",
-      serviceType: requestData.serviceType!,
-      location: requestData.location!,
-      description: requestData.description || "",
-      status: "pending",
-      createdAt: new Date(),
-      priority: requestData.priority || "medium",
+  const handleCreateRequest = async (requestData: Partial<EmergencyRequest>) => {
+    try {
+      const response = await fetch("/api/emergency", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
+      })
+
+      if (response.ok) {
+        const newRequest = await response.json()
+
+        // Simulate finding a responder after 3 seconds
+        setTimeout(() => {
+          const mockResponders = {
+            fire: { name: "Mark Maina", phone: "+254-700-123456" },
+            police: { name: "Sasha Munene", phone: "+254-700-789012" },
+            medical: { name: "Ali Hassan", phone: "+254-700-345678" },
+          }
+
+          const responder = mockResponders[requestData.serviceType as keyof typeof mockResponders]
+
+          setActiveRequest({
+            ...newRequest,
+            status: "active",
+            responderName: responder.name,
+            responderPhone: responder.phone,
+            responderLocation: {
+              lat: -1.2841,
+              lng: 36.8155,
+            },
+            estimatedArrival: "8-12 minutes",
+          })
+        }, 3000)
+
+        setActiveRequest(newRequest)
+      }
+    } catch (error) {
+      console.error("Failed to create emergency request:", error)
     }
-
-    setRequests((prev) => [...prev, newRequest])
-    setActiveRequest(newRequest)
-  }
-
-  const handleUpdateRequest = (requestId: string, status: EmergencyRequest["status"]) => {
-    setRequests((prev) =>
-      prev.map((req) => {
-        if (req.id === requestId) {
-          const updatedRequest = {
-            ...req,
-            status,
-            responderId: status === "active" ? currentUser?.id : req.responderId,
-            responderName: status === "active" ? currentUser?.name : req.responderName,
-            responderPhone: status === "active" ? currentUser?.phone : req.responderPhone,
-            acceptedAt: status === "active" ? new Date() : req.acceptedAt,
-            completedAt: status === "completed" ? new Date() : req.completedAt,
-            estimatedArrival: status === "active" ? "8 minutes" : req.estimatedArrival,
-            responderLocation: status === "active" ? { lat: -1.2841, lng: 36.8155 } : req.responderLocation,
-          }
-
-          // Update active request if it's the current user's request
-          if (req.clientId === currentUser?.id) {
-            setActiveRequest(status === "completed" ? null : updatedRequest)
-          }
-
-          return updatedRequest
-        }
-        return req
-      }),
-    )
-  }
-
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />
-  }
-
-  if (currentUser.role === "responder") {
-    return (
-      <ResponderDashboard
-        user={currentUser}
-        onLogout={handleLogout}
-        requests={requests}
-        onUpdateRequest={handleUpdateRequest}
-      />
-    )
   }
 
   return (
-    <EmergencyServices
-      user={currentUser}
-      onLogout={handleLogout}
-      onCreateRequest={handleCreateRequest}
-      activeRequest={activeRequest}
-    />
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <div className="min-h-screen">
+        {!user ? (
+          <Login onLogin={handleLogin} />
+        ) : user.userType === "client" ? (
+          <EmergencyServices
+            user={user}
+            onLogout={handleLogout}
+            onCreateRequest={handleCreateRequest}
+            activeRequest={activeRequest}
+          />
+        ) : (
+          <ResponderDashboard user={user} onLogout={handleLogout} />
+        )}
+      </div>
+    </ThemeProvider>
   )
 }

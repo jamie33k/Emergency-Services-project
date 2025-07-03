@@ -1,27 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { authenticateUser } from "@/lib/db"
+import DatabaseService from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
-    const { identifier, password } = await request.json()
+    const { username, password } = await request.json()
 
-    if (!identifier || !password) {
-      return NextResponse.json({ error: "Username/phone and password are required" }, { status: 400 })
+    if (!username || !password) {
+      return NextResponse.json({ error: "Username and password are required" }, { status: 400 })
     }
 
-    const user = await authenticateUser(identifier, password)
+    const user = await DatabaseService.authenticateUser(username, password)
 
     if (!user) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    // Remove sensitive data before sending response
-    const { password_hash, ...userWithoutPassword } = user as any
-
-    return NextResponse.json({
-      success: true,
-      user: userWithoutPassword,
-    })
+    return NextResponse.json({ user }, { status: 200 })
   } catch (error) {
     console.error("Login error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

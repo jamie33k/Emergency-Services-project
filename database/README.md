@@ -1,107 +1,94 @@
-# Huduma Emergency Services Database
+# Emergency Services Database
 
-This directory contains the database schema and sample data for the Huduma Emergency Services system.
+This directory contains the database schema and sample data for the Emergency Services System.
 
 ## Database Structure
 
 ### Tables
 
-1. **users** - Stores both clients and emergency responders
-2. **emergency_requests** - Stores all emergency service requests
-3. **emergency_contacts** - Official emergency service contacts
-4. **request_status_history** - Tracks status changes for requests
+#### users
+Stores information about both clients and emergency service responders.
 
-### Key Features
+**Columns:**
+- `id` (UUID, Primary Key) - Unique identifier
+- `username` (VARCHAR(50), Unique) - Login username
+- `password` (VARCHAR(255)) - User password (in production, this should be hashed)
+- `name` (VARCHAR(100)) - Full name
+- `email` (VARCHAR(100)) - Email address
+- `phone` (VARCHAR(20)) - Phone number
+- `user_type` (VARCHAR(20)) - Either 'client' or 'responder'
+- `service_type` (VARCHAR(20)) - For responders: 'fire', 'police', or 'medical'
+- `created_at` (TIMESTAMP) - Account creation timestamp
 
-- UUID primary keys for security
-- Automatic timestamp updates
-- Status change logging
-- Performance indexes
-- Data integrity constraints
+#### emergency_requests
+Stores emergency service requests from clients.
 
-## Setup Instructions
+**Columns:**
+- `id` (UUID, Primary Key) - Unique request identifier
+- `client_id` (UUID, Foreign Key) - References users.id
+- `client_name` (VARCHAR(100)) - Client's name
+- `client_phone` (VARCHAR(20)) - Client's phone number
+- `service_type` (VARCHAR(20)) - Type of service: 'fire', 'police', or 'medical'
+- `location_lat` (DECIMAL(10,8)) - Latitude coordinate
+- `location_lng` (DECIMAL(11,8)) - Longitude coordinate
+- `location_address` (TEXT) - Human-readable address
+- `description` (TEXT) - Description of the emergency
+- `priority` (VARCHAR(20)) - Priority level: 'low', 'medium', 'high', or 'critical'
+- `status` (VARCHAR(20)) - Request status: 'pending', 'active', 'completed', or 'cancelled'
+- `responder_id` (UUID, Foreign Key) - References users.id (when assigned)
+- `responder_name` (VARCHAR(100)) - Assigned responder's name
+- `responder_phone` (VARCHAR(20)) - Assigned responder's phone
+- `estimated_arrival` (VARCHAR(50)) - Estimated arrival time
+- `created_at` (TIMESTAMP) - Request creation timestamp
+- `updated_at` (TIMESTAMP) - Last update timestamp
 
-### 1. Database Connection
+## Files
 
-Make sure you have the following environment variable set:
+### create-tables.sql
+Contains the DDL statements to create all necessary tables and indexes.
 
-\`\`\`bash
-DATABASE_URL="postgresql://username:password@hostname:port/database"
-\`\`\`
-
-### 2. Initialize Database
-
-Run the SQL scripts in order:
-
-\`\`\`bash
-# 1. Create tables and schema
-psql $DATABASE_URL -f database/create-tables.sql
-
-# 2. Insert sample data
-psql $DATABASE_URL -f database/insert-sample-data.sql
-\`\`\`
-
-### 3. Alternative: Use API Endpoint
-
-You can also initialize the database via the API:
-
-\`\`\`bash
-curl -X POST http://localhost:3000/api/init-db
-\`\`\`
+### insert-sample-data.sql
+Contains sample data for testing the application, including:
+- Demo client accounts
+- Demo responder accounts
+- Sample emergency requests
 
 ## Demo Accounts
 
-### Clients (Username = Password)
-- **PeterNjiru** / +254798578853
-- **MichealWekesa** / +254798578854  
-- **TeejanAmusala** / +254798578855
+### Clients
+- **Username:** JohnDoe, **Password:** JohnDoe
+- **Username:** JaneSmith, **Password:** JaneSmith  
+- **Username:** MikeJohnson, **Password:** MikeJohnson
 
-### Emergency Responders (Username = Password)
-- **MarkMaina** / +254700123456 (Fire Department)
-- **SashaMunene** / +254700789012 (Police)
-- **AliHassan** / +254700345678 (Medical)
+### Responders
+- **Username:** MarkMaina, **Password:** MarkMaina (Fire Department)
+- **Username:** SashaMunene, **Password:** SashaMunene (Police Service)
+- **Username:** AliHassan, **Password:** AliHassan (Medical Emergency)
 
-## API Endpoints
+## Setup Instructions
 
-### Authentication
-- `POST /api/auth/login` - User login
+1. Ensure you have a Neon PostgreSQL database set up
+2. Add your database URL to the environment variables
+3. Run the application - it will automatically initialize the database
+4. Alternatively, you can manually run the SQL files in this order:
+   - `create-tables.sql`
+   - `insert-sample-data.sql`
 
-### Emergency Requests
-- `GET /api/emergency` - Get all requests (or user-specific)
-- `POST /api/emergency` - Create new emergency request
-- `PUT /api/emergency/[id]` - Update request status
+## Security Notes
 
-### Database Management
-- `POST /api/init-db` - Initialize database tables
+⚠️ **Important:** This is a demo application. In a production environment:
+- Passwords should be properly hashed using bcrypt or similar
+- Implement proper authentication tokens (JWT)
+- Add input validation and sanitization
+- Use environment variables for sensitive data
+- Implement proper error handling and logging
+- Add rate limiting and other security measures
 
-## Emergency Contacts
+## Database Indexes
 
-The system includes official emergency contacts for Nairobi:
-
-### Medical Services
-- Nairobi Hospital Emergency: +254-20-2845000
-- Kenyatta National Hospital: +254-20-2726300
-- Aga Khan Hospital: +254-20-3662000
-
-### Fire Services
-- Central Fire Station: +254-20-222181
-- Industrial Area Station: +254-20-558899
-
-### Police Services
-- Central Police Station: +254-20-222222
-- Kilimani Police Station: +254-20-2710000
-
-## Development Notes
-
-- The system includes fallback mock data when database is unavailable
-- All passwords are set to match usernames for demo purposes
-- Location data uses Nairobi coordinates by default
-- Status changes are automatically logged for audit purposes
-
-## Production Considerations
-
-1. **Security**: Implement proper password hashing (bcrypt)
-2. **Validation**: Add input validation and sanitization
-3. **Monitoring**: Set up database monitoring and alerts
-4. **Backup**: Implement regular database backups
-5. **Scaling**: Consider read replicas for high traffic
+The following indexes are created for optimal performance:
+- `idx_users_username` - For login queries
+- `idx_users_user_type` - For filtering by user type
+- `idx_emergency_requests_service_type` - For responder dashboards
+- `idx_emergency_requests_status` - For filtering by request status
+- `idx_emergency_requests_created_at` - For chronological ordering

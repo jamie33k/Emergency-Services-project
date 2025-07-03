@@ -1,36 +1,43 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { MapPin, Navigation, Phone, Maximize2, Minimize2 } from "lucide-react"
+import { MapPin, Navigation } from "lucide-react"
+
+interface Location {
+  lat: number
+  lng: number
+  address: string
+}
+
+interface ResponderLocation {
+  lat: number
+  lng: number
+  name: string
+  phone: string
+  serviceType: string
+  eta: string
+}
 
 interface MapViewProps {
-  userLocation: {
-    lat: number
-    lng: number
-    address: string
-  }
-  responderLocation?: {
-    lat: number
-    lng: number
-    name: string
-    phone: string
-    serviceType: string
-    eta: string
-  }
+  userLocation: Location
+  responderLocation?: ResponderLocation
   isTracking?: boolean
 }
 
 export default function MapView({ userLocation, responderLocation, isTracking = false }: MapViewProps) {
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [currentTime, setCurrentTime] = useState(new Date())
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+  const getServiceColor = (serviceType: string) => {
+    switch (serviceType) {
+      case "fire":
+        return "bg-red-600"
+      case "police":
+        return "bg-blue-600"
+      case "medical":
+        return "bg-green-600"
+      default:
+        return "bg-gray-600"
+    }
+  }
 
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 6371 // Earth's radius in km
@@ -47,165 +54,87 @@ export default function MapView({ userLocation, responderLocation, isTracking = 
     ? calculateDistance(userLocation.lat, userLocation.lng, responderLocation.lat, responderLocation.lng).toFixed(1)
     : null
 
-  const getServiceColor = (serviceType: string) => {
-    switch (serviceType) {
-      case "fire":
-        return "bg-red-600"
-      case "police":
-        return "bg-blue-600"
-      case "medical":
-        return "bg-green-600"
-      default:
-        return "bg-gray-600"
-    }
-  }
-
   return (
-    <Card className={`${isFullscreen ? "fixed inset-4 z-50" : ""} transition-all duration-300`}>
+    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <Navigation className="w-5 h-5 mr-2" />
-            Real-Time Location Tracking
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {isTracking && (
-              <Badge className="bg-green-500 animate-pulse">
-                <div className="w-2 h-2 bg-white rounded-full mr-1"></div>
-                Live Tracking
-              </Badge>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setIsFullscreen(!isFullscreen)}>
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
+        <CardTitle className="flex items-center text-gray-900 dark:text-white">
+          <Navigation className="w-5 h-5 mr-2" />
+          {isTracking ? "Live Tracking" : "Your Location"}
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <div
-          className={`bg-gradient-to-br from-green-100 to-blue-100 ${isFullscreen ? "h-[calc(100vh-200px)]" : "h-80"} rounded-lg relative overflow-hidden transition-all duration-300`}
-        >
-          {/* Map Grid Background */}
+        <div className="bg-gray-100 dark:bg-gray-700 h-64 rounded-lg flex items-center justify-center relative overflow-hidden">
+          {/* Mock Map Background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-blue-100 dark:from-green-900 dark:to-blue-900"></div>
+
+          {/* Grid lines for map effect */}
           <div className="absolute inset-0 opacity-20">
-            <svg width="100%" height="100%">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#000" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
+            <div className="grid grid-cols-8 grid-rows-8 h-full w-full">
+              {Array.from({ length: 64 }).map((_, i) => (
+                <div key={i} className="border border-gray-400 dark:border-gray-600"></div>
+              ))}
+            </div>
           </div>
 
-          {/* Roads */}
-          <svg className="absolute inset-0 w-full h-full">
-            <line x1="0" y1="30%" x2="100%" y2="30%" stroke="#666" strokeWidth="3" opacity="0.3" />
-            <line x1="0" y1="70%" x2="100%" y2="70%" stroke="#666" strokeWidth="3" opacity="0.3" />
-            <line x1="30%" y1="0" x2="30%" y2="100%" stroke="#666" strokeWidth="3" opacity="0.3" />
-            <line x1="70%" y1="0" x2="70%" y2="100%" stroke="#666" strokeWidth="3" opacity="0.3" />
-          </svg>
-
           {/* Your Location */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <div className="relative">
-              <div className="bg-blue-600 w-6 h-6 rounded-full border-4 border-white shadow-lg animate-pulse"></div>
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded shadow text-xs whitespace-nowrap font-medium">
-                Your Location
-              </div>
-              {/* Accuracy Circle */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 border-2 border-blue-300 rounded-full opacity-50 animate-ping"></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+            <div className="bg-blue-600 w-4 h-4 rounded-full border-2 border-white shadow-lg animate-pulse"></div>
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow text-xs whitespace-nowrap">
+              Your Location
             </div>
           </div>
 
           {/* Responder Location */}
-          {responderLocation && (
-            <div className="absolute top-1/3 right-1/3 transform translate-x-1/2 -translate-y-1/2">
-              <div className="relative">
-                <div
-                  className={`${getServiceColor(responderLocation.serviceType)} w-6 h-6 rounded-full border-4 border-white shadow-lg animate-bounce`}
-                >
-                  <div className="absolute inset-0 rounded-full bg-white opacity-30 animate-ping"></div>
-                </div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded shadow text-xs whitespace-nowrap font-medium">
-                  {responderLocation.name}
-                </div>
+          {responderLocation && isTracking && (
+            <div className="absolute top-1/3 right-1/3 transform translate-x-1/2 -translate-y-1/2 z-10">
+              <div
+                className={`${getServiceColor(responderLocation.serviceType)} w-4 h-4 rounded-full border-2 border-white shadow-lg animate-pulse`}
+              ></div>
+              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow text-xs whitespace-nowrap">
+                {responderLocation.name}
               </div>
             </div>
           )}
 
           {/* Route Line */}
-          {responderLocation && (
-            <svg className="absolute inset-0 w-full h-full">
+          {responderLocation && isTracking && (
+            <svg className="absolute inset-0 w-full h-full z-5">
               <line
                 x1="50%"
                 y1="50%"
                 x2="66%"
                 y2="33%"
                 stroke="#ef4444"
-                strokeWidth="3"
-                strokeDasharray="8,4"
+                strokeWidth="2"
+                strokeDasharray="5,5"
                 className="animate-pulse"
               />
-              {/* Direction Arrow */}
-              <polygon points="64,31 68,35 64,39" fill="#ef4444" className="animate-pulse" />
             </svg>
           )}
 
-          {/* Location Info Panel */}
-          <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center text-sm text-gray-600 mb-1">
-                  <MapPin className="w-4 h-4 mr-1" />
-                  <span className="font-medium">Your Location:</span>
-                </div>
-                <div className="text-xs text-gray-800">{userLocation.address}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Coordinates: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
-                </div>
+          {/* Location Info */}
+          <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg max-w-xs">
+            <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
+              <MapPin className="w-3 h-3 mr-1" />
+              {userLocation.address}
+            </div>
+            {distance && responderLocation && (
+              <div className="space-y-1">
+                <div className="text-xs text-green-600 dark:text-green-400 font-medium">Distance: {distance} km</div>
+                <div className="text-xs text-blue-600 dark:text-blue-400">ETA: {responderLocation.eta}</div>
+                <Badge className={`${getServiceColor(responderLocation.serviceType)} text-white text-xs`}>
+                  {responderLocation.serviceType.toUpperCase()}
+                </Badge>
               </div>
-
-              {responderLocation && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Navigation className="w-4 h-4 mr-1" />
-                      <span className="font-medium">Responder:</span>
-                    </div>
-                    <Badge className={getServiceColor(responderLocation.serviceType)} size="sm">
-                      {responderLocation.serviceType.toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs">
-                      <span className="font-medium">{responderLocation.name}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">Distance: {distance} km</span>
-                      <span className="text-green-600 font-medium">ETA: {responderLocation.eta}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Button size="sm" variant="outline" className="text-xs">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {responderLocation.phone}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Live Update Indicator */}
-            <div className="flex items-center justify-between mt-3 pt-2 border-t">
-              <div className="text-xs text-gray-500">Last updated: {currentTime.toLocaleTimeString()}</div>
-              {isTracking && (
-                <div className="flex items-center text-xs text-green-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></div>
-                  Tracking active
-                </div>
-              )}
-            </div>
+            )}
           </div>
+
+          {/* Status indicator */}
+          {isTracking && (
+            <div className="absolute top-4 right-4">
+              <Badge className="bg-green-600 text-white animate-pulse">LIVE</Badge>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

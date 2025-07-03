@@ -1,20 +1,29 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { X, MapPin, Phone, Clock, Navigation } from "lucide-react"
+import { X, MapPin, Phone, Clock, Navigation, FileText } from "lucide-react"
 import type { EmergencyRequest, Responder } from "../types/emergency"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface IncidentReportModalProps {
   serviceType: "fire" | "police" | "medical"
+  request: EmergencyRequest
   onClose: () => void
   onSubmit: (request: Partial<EmergencyRequest>) => void
+  onSubmitReport: (requestId: string, report: { status: string; notes: string }) => void
   nearestResponder?: Responder
   userLocation: {
     lat: number
@@ -25,14 +34,21 @@ interface IncidentReportModalProps {
 
 export default function IncidentReportModal({
   serviceType,
+  request,
   onClose,
   onSubmit,
+  onSubmitReport,
   nearestResponder,
   userLocation,
 }: IncidentReportModalProps) {
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [report, setReport] = useState({
+    status: "completed",
+    notes: "",
+  })
 
   const getServiceColor = (service: string) => {
     switch (service) {
@@ -268,7 +284,7 @@ export default function IncidentReportModal({
             )}
 
             <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1 bg-transparent">
                 Cancel
               </Button>
               <Button
@@ -280,6 +296,69 @@ export default function IncidentReportModal({
               </Button>
             </div>
           </form>
+
+          {/* Complete Emergency Response Dialog */}
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 mt-4">
+                <FileText className="w-4 h-4 mr-2" />
+                Complete
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Complete Emergency Response</DialogTitle>
+                <DialogDescription>Submit your incident report for request #{request.id.slice(-6)}</DialogDescription>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  onSubmitReport(request.id, report)
+                  setIsOpen(false)
+                  setReport({ status: "completed", notes: "" })
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-2">Final Status</label>
+                  <Select
+                    value={report.status}
+                    onValueChange={(value) => setReport((prev) => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="completed">✅ Successfully Completed</SelectItem>
+                      <SelectItem value="resolved">✅ Resolved</SelectItem>
+                      <SelectItem value="transferred">🔄 Transferred to Another Unit</SelectItem>
+                      <SelectItem value="cancelled">❌ Cancelled/False Alarm</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Incident Notes</label>
+                  <Textarea
+                    placeholder="Describe the actions taken, outcome, and any relevant details..."
+                    value={report.notes}
+                    onChange={(e) => setReport((prev) => ({ ...prev, notes: e.target.value }))}
+                    rows={4}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
+                    Submit Report
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>
