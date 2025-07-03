@@ -9,19 +9,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Username/phone and password are required" }, { status: 400 })
     }
 
-    const result = await authenticateUser(identifier.trim(), password.trim())
+    const user = await authenticateUser(identifier, password)
 
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        user: result.user,
-        message: "Login successful",
-      })
-    } else {
-      return NextResponse.json({ error: result.error || "Invalid credentials" }, { status: 401 })
+    if (!user) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
+
+    // Remove sensitive data before sending response
+    const { password_hash, ...userWithoutPassword } = user as any
+
+    return NextResponse.json({
+      success: true,
+      user: userWithoutPassword,
+    })
   } catch (error) {
-    console.error("Login API error:", error)
+    console.error("Login error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

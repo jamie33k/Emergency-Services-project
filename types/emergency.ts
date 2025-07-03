@@ -1,78 +1,50 @@
 export interface User {
   id: string
-  name: string
   username: string
   phone: string
-  password?: string
+  email: string
   role: "client" | "responder"
-  service_type?: "fire" | "police" | "medical" | null
-  status: "available" | "busy" | "offline"
-  current_location_lat?: number
-  current_location_lng?: number
-  created_at: Date
-  updated_at: Date
+  service_type?: "medical" | "fire" | "police"
+  created_at: string
 }
 
 export interface EmergencyRequest {
   id: string
-  client_id: string
-  client_name: string
-  client_phone: string
-  service_type: "fire" | "police" | "medical"
-  location_lat: number
-  location_lng: number
-  location_address?: string
+  user_id: string
+  service_type: "medical" | "fire" | "police"
   description: string
-  status: "pending" | "active" | "completed" | "declined"
+  location: string
+  latitude?: number
+  longitude?: number
+  status: "pending" | "assigned" | "in_progress" | "completed" | "cancelled"
   priority: "low" | "medium" | "high" | "critical"
-  responder_id?: string
-  responder_name?: string
-  responder_phone?: string
-  responder_location_lat?: number
-  responder_location_lng?: number
-  estimated_arrival?: string
-  created_at: Date
-  accepted_at?: Date
-  completed_at?: Date
-  updated_at: Date
+  assigned_responder_id?: string
+  created_at: string
+  updated_at: string
 }
 
 export interface EmergencyContact {
   id: string
+  service_type: "medical" | "fire" | "police"
   name: string
   phone: string
-  service_type: "fire" | "police" | "medical"
   location?: string
   is_active: boolean
-  created_at: Date
-}
-
-export interface RequestStatusHistory {
-  id: string
-  request_id: string
-  status: string
-  changed_by?: string
-  notes?: string
-  created_at: Date
+  created_at: string
 }
 
 export interface Location {
-  lat: number
-  lng: number
+  latitude: number
+  longitude: number
   address?: string
 }
 
-export interface Responder {
+export interface ServiceProvider {
   id: string
   name: string
+  service_type: "medical" | "fire" | "police"
   phone: string
-  service_type: "fire" | "police" | "medical"
   location: Location
   status: "available" | "busy" | "offline"
-  current_requests: number
-}
-
-export interface LoginCredentials {
-  phone: string
-  role: "client" | "responder"
+  rating?: number
 }

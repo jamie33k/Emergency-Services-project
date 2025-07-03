@@ -101,7 +101,7 @@ export default function Login({ onLogin }: LoginProps) {
                   <Input
                     id="identifier"
                     type="text"
-                    placeholder="PeterNjiru or +254798578853"
+                    placeholder="Enter username"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     className="pl-10 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"
@@ -119,7 +119,7 @@ export default function Login({ onLogin }: LoginProps) {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Enter your password (same as username)"
+                    placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"

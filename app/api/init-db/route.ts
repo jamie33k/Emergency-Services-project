@@ -3,19 +3,19 @@ import { initializeDatabase } from "@/lib/db"
 
 export async function POST() {
   try {
-    const result = await initializeDatabase()
+    const success = await initializeDatabase()
 
-    if (result.success) {
+    if (success) {
       return NextResponse.json({
         success: true,
-        message: result.message,
+        message: "Database initialized successfully",
       })
     } else {
-      return NextResponse.json({ error: result.error }, { status: 500 })
+      return NextResponse.json({ error: "Failed to initialize database" }, { status: 500 })
     }
   } catch (error) {
     console.error("Database initialization error:", error)
-    return NextResponse.json({ error: "Failed to initialize database" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
