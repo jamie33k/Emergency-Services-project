@@ -2,71 +2,120 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Phone, MapPin, Clock, AlertTriangle, CheckCircle, Sun, Moon } from "lucide-react"
-import { useTheme } from "next-themes"
-import type { User, EmergencyRequest } from "../types/emergency"
+import { Separator } from "@/components/ui/separator"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Phone, MapPin, Clock, LogOut, CheckCircle, AlertTriangle } from "lucide-react"
+import MapView from "./map-view"
+import { ThemeToggle } from "./theme-toggle"
+
+interface EmergencyRequest {
+  id: string
+  client_id: string
+  client_name: string
+  client_phone: string
+  service_type: "fire" | "police" | "medical"
+  location_lat: number
+  location_lng: number
+  location_address: string
+  description: string
+  priority: "low" | "medium" | "high" | "critical"
+  status: "pending" | "active" | "completed" | "cancelled"
+  responder_id?: string
+  responder_name?: string
+  responder_phone?: string
+  estimated_arrival?: string
+  created_at: string
+  updated_at: string
+}
 
 interface ResponderDashboardProps {
-  user: User
+  user: any
   onLogout: () => void
 }
 
 export default function ResponderDashboard({ user, onLogout }: ResponderDashboardProps) {
-  const { theme, setTheme } = useTheme()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
-  const [activeRequests, setActiveRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [estimatedArrival, setEstimatedArrival] = useState("")
 
   useEffect(() => {
     fetchRequests()
+    // Set up polling for real-time updates
+    const interval = setInterval(fetchRequests, 30000) // Poll every 30 seconds
+    return () => clearInterval(interval)
   }, [user.serviceType])
 
   const fetchRequests = async () => {
+    if (!user.serviceType) return
+
     try {
       const response = await fetch(`/api/emergency?serviceType=${user.serviceType}`)
-      if (response.ok) {
-        const data = await response.json()
-        setRequests(data.filter((req: EmergencyRequest) => req.status === "pending"))
-        setActiveRequests(data.filter((req: EmergencyRequest) => req.status === "active"))
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setRequests(data.requests)
+      } else {
+        setError(data.error || "Failed to fetch requests")
       }
     } catch (error) {
-      console.error("Failed to fetch requests:", error)
+      console.error("Fetch requests error:", error)
+      setError("Network error. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleAcceptRequest = async (requestId: string) => {
+  const handleAcceptRequest = (request: EmergencyRequest) => {
+    setSelectedRequest(request)
+    setEstimatedArrival("")
+    setIsModalOpen(true)
+  }
+
+  const handleConfirmAccept = async () => {
+    if (!selectedRequest) return
+
     try {
-      const response = await fetch(`/api/emergency/${requestId}`, {
-        method: "PATCH",
+      const response = await fetch(`/api/emergency/${selectedRequest.id}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           status: "active",
-          responderName: user.name,
-          responderPhone: user.phone,
-          estimatedArrival: "8-12 minutes",
+          responder_id: user.id,
+          responder_name: user.name,
+          responder_phone: user.phone,
+          estimated_arrival: estimatedArrival,
         }),
       })
 
-      if (response.ok) {
-        fetchRequests()
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setRequests((prev) => prev.map((req) => (req.id === selectedRequest.id ? data.request : req)))
+        setIsModalOpen(false)
+        setSelectedRequest(null)
+      } else {
+        setError(data.error || "Failed to accept request")
       }
     } catch (error) {
-      console.error("Failed to accept request:", error)
+      console.error("Accept request error:", error)
+      setError("Network error. Please try again.")
     }
   }
 
   const handleCompleteRequest = async (requestId: string) => {
     try {
       const response = await fetch(`/api/emergency/${requestId}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
@@ -75,98 +124,92 @@ export default function ResponderDashboard({ user, onLogout }: ResponderDashboar
         }),
       })
 
-      if (response.ok) {
-        fetchRequests()
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setRequests((prev) => prev.map((req) => (req.id === requestId ? data.request : req)))
+      } else {
+        setError(data.error || "Failed to complete request")
       }
     } catch (error) {
-      console.error("Failed to complete request:", error)
-    }
-  }
-
-  const getServiceColor = (serviceType: string) => {
-    switch (serviceType) {
-      case "fire":
-        return "bg-red-600"
-      case "police":
-        return "bg-blue-600"
-      case "medical":
-        return "bg-green-600"
-      default:
-        return "bg-gray-600"
+      console.error("Complete request error:", error)
+      setError("Network error. Please try again.")
     }
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "critical":
-        return "bg-red-600 text-white"
+        return "bg-red-500"
       case "high":
-        return "bg-orange-500 text-white"
+        return "bg-orange-500"
       case "medium":
-        return "bg-yellow-500 text-black"
+        return "bg-yellow-500"
       case "low":
-        return "bg-green-500 text-white"
+        return "bg-green-500"
       default:
-        return "bg-gray-500 text-white"
+        return "bg-gray-500"
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Loading dashboard...</p>
-        </div>
-      </div>
-    )
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-500"
+      case "active":
+        return "bg-blue-500"
+      case "completed":
+        return "bg-green-500"
+      case "cancelled":
+        return "bg-red-500"
+      default:
+        return "bg-gray-500"
+    }
   }
 
+  const getServiceIcon = (serviceType: string) => {
+    switch (serviceType) {
+      case "fire":
+        return "🚒"
+      case "police":
+        return "🚔"
+      case "medical":
+        return "🚑"
+      default:
+        return "🚨"
+    }
+  }
+
+  const pendingRequests = requests.filter((req) => req.status === "pending")
+  const activeRequests = requests.filter((req) => req.status === "active" && req.responder_id === user.id)
+  const completedRequests = requests.filter((req) => req.status === "completed" && req.responder_id === user.id)
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+      <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div
-                  className={`w-8 h-8 ${getServiceColor(user.serviceType || "")} rounded-full flex items-center justify-center`}
-                >
-                  <span className="text-white font-bold text-sm">
-                    {user.serviceType === "fire" ? "🔥" : user.serviceType === "police" ? "👮" : "🚑"}
-                  </span>
-                </div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">Responder Dashboard</h1>
+              <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-lg">E</span>
               </div>
-              <Badge className={`${getServiceColor(user.serviceType || "")} text-white`}>
-                {user.serviceType?.toUpperCase()} RESPONDER
-              </Badge>
+              <div>
+                <h1 className="text-2xl font-bold">EmergencyConnect</h1>
+                <p className="text-sm text-muted-foreground">
+                  {user.serviceType && getServiceIcon(user.serviceType)} {user.serviceType?.toUpperCase()} Responder
+                  Dashboard
+                </p>
+              </div>
             </div>
-
             <div className="flex items-center space-x-4">
-              {/* Theme Toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="w-9 h-9 p-0"
-              >
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span className="sr-only">Toggle theme</span>
-              </Button>
-
+              <ThemeToggle />
               <div className="flex items-center space-x-2">
-                <div
-                  className={`w-8 h-8 ${getServiceColor(user.serviceType || "")} rounded-full flex items-center justify-center`}
-                >
-                  <span className="text-white font-medium text-sm">{user.name?.charAt(0) || "R"}</span>
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{user.name || "Responder"}</span>
+                <span className="h-4 w-4 text-muted-foreground">👤</span>
+                <span className="font-medium">{user.name}</span>
               </div>
-              <Button variant="outline" onClick={onLogout} size="sm">
-                <LogOut className="w-4 h-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={onLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </Button>
             </div>
@@ -174,190 +217,304 @@ export default function ResponderDashboard({ user, onLogout }: ResponderDashboar
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending Requests</CardTitle>
-                <div className="text-2xl font-bold text-orange-600">{requests.length}</div>
+      <div className="container mx-auto px-4 py-8">
+        {/* Error Alert */}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                      <p className="text-2xl font-bold">{pendingRequests.length}</p>
+                    </div>
+                    <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Active</p>
+                      <p className="text-2xl font-bold">{activeRequests.length}</p>
+                    </div>
+                    <Clock className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Completed</p>
+                      <p className="text-2xl font-bold">{completedRequests.length}</p>
+                    </div>
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Pending Requests */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending Emergency Requests</CardTitle>
+                <CardDescription>New requests waiting for response</CardDescription>
               </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                    <p className="mt-2 text-muted-foreground">Loading requests...</p>
+                  </div>
+                ) : pendingRequests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No pending requests</p>
+                    <p className="text-sm">All caught up!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingRequests.map((request) => (
+                      <div key={request.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-2xl">{getServiceIcon(request.service_type)}</span>
+                            <div>
+                              <h3 className="font-semibold">{request.client_name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(request.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Badge className={`${getPriorityColor(request.priority)} text-white`}>
+                              {request.priority}
+                            </Badge>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handleAcceptRequest(request)}
+                            >
+                              Accept
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{request.location_address}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span>{request.client_phone}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t">
+                          <p className="text-sm">
+                            <strong>Description:</strong> {request.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             </Card>
 
-            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Responses</CardTitle>
-                <div className="text-2xl font-bold text-blue-600">{activeRequests.length}</div>
-              </CardHeader>
-            </Card>
+            {/* Active Requests */}
+            {activeRequests.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Your Active Requests</CardTitle>
+                  <CardDescription>Requests you are currently handling</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {activeRequests.map((request) => (
+                      <div key={request.id} className="border rounded-lg p-4 space-y-3 bg-blue-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-2xl">{getServiceIcon(request.service_type)}</span>
+                            <div>
+                              <h3 className="font-semibold">{request.client_name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                ETA: {request.estimated_arrival || "Not specified"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Badge className={`${getStatusColor(request.status)} text-white`}>{request.status}</Badge>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handleCompleteRequest(request.id)}
+                            >
+                              Complete
+                            </Button>
+                          </div>
+                        </div>
 
-            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Service Type</CardTitle>
-                <div className="text-2xl font-bold text-green-600">{user.serviceType?.toUpperCase()}</div>
-              </CardHeader>
-            </Card>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{request.location_address}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span>{request.client_phone}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t">
+                          <p className="text-sm">
+                            <strong>Description:</strong> {request.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Requests Tabs */}
-          <Tabs defaultValue="pending" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="pending">Pending Requests ({requests.length})</TabsTrigger>
-              <TabsTrigger value="active">Active Responses ({activeRequests.length})</TabsTrigger>
-            </TabsList>
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Responder Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <span className="h-4 w-4 text-muted-foreground">👤</span>
+                  <span>{user.name}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="h-4 w-4 text-muted-foreground">📞</span>
+                  <span>{user.phone}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">{getServiceIcon(user.serviceType || "")}</span>
+                  <span className="capitalize">{user.serviceType} Service</span>
+                </div>
+                <Separator />
+                <div className="text-sm text-muted-foreground">
+                  <p>Status: Available for emergency response</p>
+                </div>
+              </CardContent>
+            </Card>
 
-            <TabsContent value="pending" className="space-y-4">
-              {requests.length === 0 ? (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>No pending requests at the moment.</AlertDescription>
-                </Alert>
-              ) : (
-                requests.map((request) => (
-                  <Card key={request.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center space-x-2">
-                          <AlertTriangle className="w-5 h-5 text-orange-500" />
-                          <span>Emergency Request</span>
-                          <Badge className={getPriorityColor(request.priority)}>{request.priority.toUpperCase()}</Badge>
-                        </CardTitle>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(request.createdAt).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center text-sm">
-                            <span className="w-20 text-gray-600 dark:text-gray-400">Client:</span>
-                            <span className="font-medium">{request.clientName}</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Phone className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                            <span className="w-16 text-gray-600 dark:text-gray-400">Phone:</span>
-                            <a
-                              href={`tel:${request.clientPhone}`}
-                              className="text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              {request.clientPhone}
-                            </a>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <MapPin className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                            <span className="w-16 text-gray-600 dark:text-gray-400">Location:</span>
-                            <span className="text-sm">{request.location.address}</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">Description:</span>
-                            <p className="mt-1 text-gray-900 dark:text-gray-100">{request.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <Button
-                          onClick={() => handleAcceptRequest(request.id)}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Accept Request
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <a href={`tel:${request.clientPhone}`}>
-                            <Phone className="w-4 h-4 mr-2" />
-                            Call Client
-                          </a>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </TabsContent>
+            {/* Map */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Location</CardTitle>
+                <CardDescription>Current location for dispatch</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MapView />
+              </CardContent>
+            </Card>
 
-            <TabsContent value="active" className="space-y-4">
-              {activeRequests.length === 0 ? (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>No active responses at the moment.</AlertDescription>
-                </Alert>
-              ) : (
-                activeRequests.map((request) => (
-                  <Card key={request.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center space-x-2">
-                          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>Active Response</span>
-                          <Badge className="bg-green-600 text-white">EN ROUTE</Badge>
-                        </CardTitle>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Started: {new Date(request.createdAt).toLocaleTimeString()}
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Completions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {completedRequests.slice(0, 3).length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p className="text-sm">No completed requests yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {completedRequests.slice(0, 3).map((request) => (
+                      <div key={request.id} className="flex items-center space-x-3 text-sm">
+                        <span>{getServiceIcon(request.service_type)}</span>
+                        <div className="flex-1">
+                          <p className="font-medium">{request.client_name}</p>
+                          <p className="text-muted-foreground">{new Date(request.updated_at).toLocaleDateString()}</p>
                         </div>
+                        <Badge className="bg-green-500 text-white">Completed</Badge>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center text-sm">
-                            <span className="w-20 text-gray-600 dark:text-gray-400">Client:</span>
-                            <span className="font-medium">{request.clientName}</span>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Phone className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                            <span className="w-16 text-gray-600 dark:text-gray-400">Phone:</span>
-                            <a
-                              href={`tel:${request.clientPhone}`}
-                              className="text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              {request.clientPhone}
-                            </a>
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Clock className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                            <span className="w-16 text-gray-600 dark:text-gray-400">ETA:</span>
-                            <span className="font-medium text-green-600">{request.estimatedArrival}</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center text-sm">
-                            <MapPin className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                            <span className="w-16 text-gray-600 dark:text-gray-400">Location:</span>
-                            <span className="text-sm">{request.location.address}</span>
-                          </div>
-                          <div className="text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">Description:</span>
-                            <p className="mt-1 text-gray-900 dark:text-gray-100">{request.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <Button
-                          onClick={() => handleCompleteRequest(request.id)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Mark Complete
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <a href={`tel:${request.clientPhone}`}>
-                            <Phone className="w-4 h-4 mr-2" />
-                            Call Client
-                          </a>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </TabsContent>
-          </Tabs>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </main>
+      </div>
+
+      {/* Accept Request Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Accept Emergency Request</DialogTitle>
+            <DialogDescription>
+              You are about to accept this emergency request. Please provide an estimated arrival time.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRequest && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">{getServiceIcon(selectedRequest.service_type)}</span>
+                  <span className="font-semibold">{selectedRequest.client_name}</span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    <strong>Location:</strong> {selectedRequest.location_address}
+                  </p>
+                  <p>
+                    <strong>Priority:</strong> {selectedRequest.priority}
+                  </p>
+                  <p>
+                    <strong>Description:</strong> {selectedRequest.description}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="eta">Estimated Arrival Time</Label>
+                <Input
+                  id="eta"
+                  value={estimatedArrival}
+                  onChange={(e) => setEstimatedArrival(e.target.value)}
+                  placeholder="e.g., 10 minutes, 15 mins, etc."
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleConfirmAccept}
+                  disabled={!estimatedArrival.trim()}
+                >
+                  Accept Request
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

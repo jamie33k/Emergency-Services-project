@@ -1,142 +1,123 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { MapPin, Navigation } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { MapPin, Loader2 } from "lucide-react"
 
-interface Location {
-  lat: number
-  lng: number
-  address: string
-}
+export default function MapView() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-interface ResponderLocation {
-  lat: number
-  lng: number
-  name: string
-  phone: string
-  serviceType: string
-  eta: string
-}
+  const getCurrentLocation = () => {
+    setIsLoading(true)
+    setError("")
 
-interface MapViewProps {
-  userLocation: Location
-  responderLocation?: ResponderLocation
-  isTracking?: boolean
-}
-
-export default function MapView({ userLocation, responderLocation, isTracking = false }: MapViewProps) {
-  const getServiceColor = (serviceType: string) => {
-    switch (serviceType) {
-      case "fire":
-        return "bg-red-600"
-      case "police":
-        return "bg-blue-600"
-      case "medical":
-        return "bg-green-600"
-      default:
-        return "bg-gray-600"
+    if (!navigator.geolocation) {
+      setError("Geolocation not supported")
+      setIsLoading(false)
+      return
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        setLocation({ lat: latitude, lng: longitude })
+        setIsLoading(false)
+      },
+      (error) => {
+        console.error("Geolocation error:", error)
+        setError("Unable to get location")
+        setIsLoading(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      },
+    )
   }
 
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371 // Earth's radius in km
-    const dLat = ((lat2 - lat1) * Math.PI) / 180
-    const dLng = ((lng2 - lng1) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return R * c
-  }
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-  const distance = responderLocation
-    ? calculateDistance(userLocation.lat, userLocation.lng, responderLocation.lat, responderLocation.lng).toFixed(1)
-    : null
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    // Set canvas size
+    canvas.width = 300
+    canvas.height = 200
+
+    // Clear canvas
+    ctx.fillStyle = "#f3f4f6"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    if (location) {
+      // Draw a simple map representation
+      ctx.fillStyle = "#10b981"
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.7)
+
+      ctx.fillStyle = "#3b82f6"
+      ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3)
+
+      // Draw location marker
+      const centerX = canvas.width / 2
+      const centerY = canvas.height / 2
+
+      // Marker pin
+      ctx.fillStyle = "#ef4444"
+      ctx.beginPath()
+      ctx.arc(centerX, centerY - 10, 8, 0, 2 * Math.PI)
+      ctx.fill()
+
+      // Marker point
+      ctx.fillStyle = "#dc2626"
+      ctx.beginPath()
+      ctx.moveTo(centerX, centerY - 2)
+      ctx.lineTo(centerX - 6, centerY - 18)
+      ctx.lineTo(centerX + 6, centerY - 18)
+      ctx.closePath()
+      ctx.fill()
+
+      // Location text
+      ctx.fillStyle = "#1f2937"
+      ctx.font = "12px Arial"
+      ctx.textAlign = "center"
+      ctx.fillText(`${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`, centerX, canvas.height - 10)
+    } else {
+      // Draw placeholder
+      ctx.fillStyle = "#6b7280"
+      ctx.font = "14px Arial"
+      ctx.textAlign = "center"
+      ctx.fillText("Click to get your location", canvas.width / 2, canvas.height / 2)
+    }
+  }, [location])
 
   return (
-    <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-      <CardHeader>
-        <CardTitle className="flex items-center text-gray-900 dark:text-white">
-          <Navigation className="w-5 h-5 mr-2" />
-          {isTracking ? "Live Tracking" : "Your Location"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="bg-gray-100 dark:bg-gray-700 h-64 rounded-lg flex items-center justify-center relative overflow-hidden">
-          {/* Mock Map Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-blue-100 dark:from-green-900 dark:to-blue-900"></div>
+    <div className="space-y-4">
+      <canvas
+        ref={canvasRef}
+        className="w-full border rounded-lg cursor-pointer"
+        onClick={getCurrentLocation}
+        style={{ maxWidth: "100%", height: "auto" }}
+      />
 
-          {/* Grid lines for map effect */}
-          <div className="absolute inset-0 opacity-20">
-            <div className="grid grid-cols-8 grid-rows-8 h-full w-full">
-              {Array.from({ length: 64 }).map((_, i) => (
-                <div key={i} className="border border-gray-400 dark:border-gray-600"></div>
-              ))}
-            </div>
+      <div className="flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={getCurrentLocation} disabled={isLoading}>
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
+          {isLoading ? "Getting..." : "Update Location"}
+        </Button>
+
+        {location && (
+          <div className="text-sm text-muted-foreground">
+            {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
           </div>
+        )}
+      </div>
 
-          {/* Your Location */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-            <div className="bg-blue-600 w-4 h-4 rounded-full border-2 border-white shadow-lg animate-pulse"></div>
-            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow text-xs whitespace-nowrap">
-              Your Location
-            </div>
-          </div>
-
-          {/* Responder Location */}
-          {responderLocation && isTracking && (
-            <div className="absolute top-1/3 right-1/3 transform translate-x-1/2 -translate-y-1/2 z-10">
-              <div
-                className={`${getServiceColor(responderLocation.serviceType)} w-4 h-4 rounded-full border-2 border-white shadow-lg animate-pulse`}
-              ></div>
-              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow text-xs whitespace-nowrap">
-                {responderLocation.name}
-              </div>
-            </div>
-          )}
-
-          {/* Route Line */}
-          {responderLocation && isTracking && (
-            <svg className="absolute inset-0 w-full h-full z-5">
-              <line
-                x1="50%"
-                y1="50%"
-                x2="66%"
-                y2="33%"
-                stroke="#ef4444"
-                strokeWidth="2"
-                strokeDasharray="5,5"
-                className="animate-pulse"
-              />
-            </svg>
-          )}
-
-          {/* Location Info */}
-          <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg max-w-xs">
-            <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
-              <MapPin className="w-3 h-3 mr-1" />
-              {userLocation.address}
-            </div>
-            {distance && responderLocation && (
-              <div className="space-y-1">
-                <div className="text-xs text-green-600 dark:text-green-400 font-medium">Distance: {distance} km</div>
-                <div className="text-xs text-blue-600 dark:text-blue-400">ETA: {responderLocation.eta}</div>
-                <Badge className={`${getServiceColor(responderLocation.serviceType)} text-white text-xs`}>
-                  {responderLocation.serviceType.toUpperCase()}
-                </Badge>
-              </div>
-            )}
-          </div>
-
-          {/* Status indicator */}
-          {isTracking && (
-            <div className="absolute top-4 right-4">
-              <Badge className="bg-green-600 text-white animate-pulse">LIVE</Badge>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      {error && <div className="text-sm text-red-600">{error}</div>}
+    </div>
   )
 }

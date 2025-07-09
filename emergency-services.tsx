@@ -1,461 +1,449 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
+import Login from "@/components/login"
+import ResponderDashboard from "@/components/responder-dashboard"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MapPin, Phone, Clock, AlertTriangle, LogOut, Sun, Moon } from "lucide-react"
-import { useTheme } from "next-themes"
-import MapView from "./components/map-view"
-import type { User, EmergencyRequest } from "./types/emergency"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Phone, MapPin, Clock, AlertTriangle, CheckCircle, Flame, Shield, Heart, Navigation } from "lucide-react"
+import MapView from "@/components/map-view"
+import type { EmergencyRequest, Location } from "@/types/emergency"
 
-interface EmergencyServicesProps {
-  user: User
-  onLogout: () => void
-  onCreateRequest: (requestData: Partial<EmergencyRequest>) => void
-  activeRequest: EmergencyRequest | null
+interface User {
+  id: string
+  username: string
+  name: string
+  email: string
+  phone: string
+  userType: "client" | "responder"
+  serviceType?: "fire" | "police" | "medical"
 }
 
-export default function EmergencyServices({ user, onLogout, onCreateRequest, activeRequest }: EmergencyServicesProps) {
-  const { theme, setTheme } = useTheme()
-  const [isCreatingRequest, setIsCreatingRequest] = useState(false)
-  const [newRequest, setNewRequest] = useState({
-    serviceType: "",
-    description: "",
-    priority: "medium" as const,
-  })
+export default function EmergencyServices() {
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedService, setSelectedService] = useState<"fire" | "police" | "medical" | null>(null)
+  const [location, setLocation] = useState<Location | null>(null)
+  const [description, setDescription] = useState("")
+  const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeRequest, setActiveRequest] = useState<EmergencyRequest | null>(null)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
 
-  // Mock current location
-  const [currentLocation] = useState({
-    lat: -1.2921,
-    lng: 36.8219,
-    address: "Nairobi CBD, Kenya",
-  })
-
-  // Mock responder location (when request is active)
-  const responderLocation =
-    activeRequest?.status === "active" && activeRequest.responderLocation
-      ? {
-          lat: activeRequest.responderLocation.lat,
-          lng: activeRequest.responderLocation.lng,
-          name: activeRequest.responderName || "Emergency Responder",
-          phone: activeRequest.responderPhone || "",
-          serviceType: activeRequest.serviceType,
-          eta: activeRequest.estimatedArrival || "Unknown",
-        }
-      : undefined
-
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371 // Earth's radius in km
-    const dLat = ((lat2 - lat1) * Math.PI) / 180
-    const dLng = ((lng2 - lng1) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return R * c
-  }
-
-  const handleServiceCardClick = (serviceType: string) => {
-    setNewRequest((prev) => ({ ...prev, serviceType }))
-  }
-
-  const handleCreateRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsCreatingRequest(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const requestData: Partial<EmergencyRequest> = {
-      clientId: user.id,
-      clientName: user.name,
-      clientPhone: user.phone,
-      serviceType: newRequest.serviceType as "fire" | "police" | "medical",
-      location: currentLocation,
-      description: newRequest.description,
-      priority: newRequest.priority,
+  useEffect(() => {
+    // Initialize database on app start
+    const initializeDatabase = async () => {
+      try {
+        await fetch("/api/init-db", { method: "POST" })
+      } catch (error) {
+        console.error("Database initialization failed:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
 
-    onCreateRequest(requestData)
-    setIsCreatingRequest(false)
+    initializeDatabase()
+  }, [])
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            address: `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`,
+          })
+        },
+        (error) => {
+          console.error("Error getting location:", error)
+          // Set default location (Nairobi, Kenya)
+          setLocation({
+            lat: -1.2921,
+            lng: 36.8219,
+            address: "Nairobi, Kenya",
+          })
+        },
+      )
+    } else {
+      // Fallback if geolocation is not supported
+      setLocation({
+        lat: -1.2921,
+        lng: 36.8219,
+        address: "Nairobi, Kenya",
+      })
+    }
+  }, [])
+
+  const services = [
+    {
+      id: "fire" as const,
+      name: "Fire Brigade",
+      description: "Fire emergencies, rescue operations, and hazardous material incidents",
+      icon: Flame,
+      color: "bg-red-500",
+      hoverColor: "hover:bg-red-600",
+      textColor: "text-red-600",
+      bgColor: "bg-red-50",
+      borderColor: "border-red-200",
+    },
+    {
+      id: "police" as const,
+      name: "Police Service",
+      description: "Security threats, criminal activities, and law enforcement",
+      icon: Shield,
+      color: "bg-blue-500",
+      hoverColor: "hover:bg-blue-600",
+      textColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+    },
+    {
+      id: "medical" as const,
+      name: "Medical Emergency",
+      description: "Medical emergencies, ambulance services, and health crises",
+      icon: Heart,
+      color: "bg-green-500",
+      hoverColor: "hover:bg-green-600",
+      textColor: "text-green-600",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200",
+    },
+  ]
+
+  const handleServiceSelect = (serviceId: "fire" | "police" | "medical") => {
+    setSelectedService(serviceId)
+    setError("")
+    setSuccess("")
   }
 
-  const getServiceColor = (serviceType: string) => {
-    switch (serviceType) {
-      case "fire":
-        return "bg-red-600"
-      case "police":
-        return "bg-blue-600"
-      case "medical":
-        return "bg-green-600"
-      default:
-        return "bg-gray-600"
+  const handleSubmitRequest = async () => {
+    if (!selectedService || !location || !description.trim()) {
+      setError("Please select a service, ensure location is available, and provide a description")
+      return
+    }
+
+    if (!user?.id) {
+      setError("User information is missing. Please log in again.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setError("")
+
+    try {
+      const requestPayload = {
+        clientId: user.id,
+        clientName: user.name || user.username,
+        clientPhone: user.phone || "N/A",
+        serviceType: selectedService,
+        locationLat: location.lat,
+        locationLng: location.lng,
+        locationAddress: location.address,
+        description,
+        priority,
+      }
+
+      console.log("Submitting request with payload:", requestPayload)
+
+      const response = await fetch("/api/emergency", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestPayload),
+      })
+
+      if (response.ok) {
+        const newRequest = await response.json()
+        setActiveRequest(newRequest)
+        setSuccess("Emergency request submitted successfully!")
+        setDescription("")
+        setPriority("medium")
+      } else {
+        const errorData = await response.json()
+        setError(errorData.error || "Failed to submit request")
+      }
+    } catch (error) {
+      console.error("Submit error:", error)
+      setError("Network error. Please try again.")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const distance = activeRequest?.responderLocation
-    ? calculateDistance(
-        currentLocation.lat,
-        currentLocation.lng,
-        activeRequest.responderLocation.lat,
-        activeRequest.responderLocation.lng,
-      ).toFixed(1)
-    : null
+  const handleCancelRequest = async () => {
+    if (!activeRequest) return
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">E</span>
-                </div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">EmergencyConnect</h1>
-              </div>
-              <Badge variant="destructive" className="bg-red-600 hover:bg-red-700 text-white">
-                🚨 Emergency Hotline: 020-2222-181
-              </Badge>
+    try {
+      const response = await fetch(`/api/emergency/${activeRequest.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "cancelled" }),
+      })
+
+      if (response.ok) {
+        setActiveRequest(null)
+        setSelectedService(null)
+        setSuccess("Request cancelled successfully")
+      }
+    } catch (error) {
+      console.error("Cancel error:", error)
+      setError("Failed to cancel request")
+    }
+  }
+
+  const handleLogin = (userData: User) => {
+    setUser(userData)
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+  }
+
+  if (isLoading) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-white font-bold text-2xl">E</span>
             </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Theme Toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="w-9 h-9 p-0"
-              >
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span className="sr-only">Toggle theme</span>
-              </Button>
-
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-medium text-sm">{user?.name?.charAt(0) || "U"}</span>
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Welcome, {user?.name || "User"}
-                </span>
-              </div>
-              <Button variant="outline" onClick={onLogout} size="sm">
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
+            <h1 className="text-2xl font-bold mb-2">EmergencyConnect</h1>
+            <p className="text-gray-600">Initializing system...</p>
           </div>
         </div>
-      </header>
+      </ThemeProvider>
+    )
+  }
 
-      <main className="container mx-auto px-4 py-8">
-        {!activeRequest ? (
-          <div className="max-w-6xl mx-auto space-y-8">
-            {/* Service Cards */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card
-                className={`group hover:shadow-lg transition-all duration-300 border-2 cursor-pointer ${
-                  newRequest.serviceType === "fire"
-                    ? "border-red-500 bg-red-50 dark:bg-red-900/20"
-                    : "border-transparent bg-white/70 dark:bg-gray-800/70 hover:border-red-200"
-                } backdrop-blur-sm`}
-                onClick={() => handleServiceCardClick("fire")}
-              >
-                <CardHeader className="pb-3">
-                  <div className="w-full h-48 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img
-                      src="/images/fire-truck.jpg"
-                      alt="Fire Brigade"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <CardTitle className="text-red-600 dark:text-red-400">🔥 Fire Brigade</CardTitle>
-                  <CardDescription className="dark:text-gray-400">
-                    Professional fire emergency response team available 24/7
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <Phone className="w-4 h-4 mr-2" />
-                    Direct: +254-700-123456
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Response Time: 5-8 minutes
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500">Responder: Mark Maina</div>
-                  {newRequest.serviceType === "fire" && <Badge className="bg-red-600 text-white">Selected</Badge>}
-                </CardContent>
-              </Card>
-
-              <Card
-                className={`group hover:shadow-lg transition-all duration-300 border-2 cursor-pointer ${
-                  newRequest.serviceType === "police"
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-transparent bg-white/70 dark:bg-gray-800/70 hover:border-blue-200"
-                } backdrop-blur-sm`}
-                onClick={() => handleServiceCardClick("police")}
-              >
-                <CardHeader className="pb-3">
-                  <div className="w-full h-48 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img
-                      src="/images/police-officer.jpg"
-                      alt="Police Service"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <CardTitle className="text-blue-600 dark:text-blue-400">👮 Police Service</CardTitle>
-                  <CardDescription className="dark:text-gray-400">
-                    Rapid police response for security and law enforcement
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <Phone className="w-4 h-4 mr-2" />
-                    Direct: +254-700-789012
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Response Time: 3-6 minutes
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500">Responder: Sasha Munene</div>
-                  {newRequest.serviceType === "police" && <Badge className="bg-blue-600 text-white">Selected</Badge>}
-                </CardContent>
-              </Card>
-
-              <Card
-                className={`group hover:shadow-lg transition-all duration-300 border-2 cursor-pointer ${
-                  newRequest.serviceType === "medical"
-                    ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                    : "border-transparent bg-white/70 dark:bg-gray-800/70 hover:border-green-200"
-                } backdrop-blur-sm`}
-                onClick={() => handleServiceCardClick("medical")}
-              >
-                <CardHeader className="pb-3">
-                  <div className="w-full h-48 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img
-                      src="/images/ambulance.jpg"
-                      alt="Medical Emergency"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <CardTitle className="text-green-600 dark:text-green-400">🚑 Medical Emergency</CardTitle>
-                  <CardDescription className="dark:text-gray-400">
-                    Advanced life support and emergency medical care
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <Phone className="w-4 h-4 mr-2" />
-                    Direct: +254-700-345678
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Response Time: 4-7 minutes
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500">Responder: Ali Hassan</div>
-                  {newRequest.serviceType === "medical" && <Badge className="bg-green-600 text-white">Selected</Badge>}
-                </CardContent>
-              </Card>
-            </div>
-
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <div className="min-h-screen bg-background">
+        {!user ? (
+          <Login onLogin={handleLogin} />
+        ) : user.userType === "client" ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Request Form */}
-              <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-                <CardHeader>
-                  <CardTitle className="text-gray-900 dark:text-white">Request Emergency Service</CardTitle>
-                  <CardDescription className="dark:text-gray-400">
-                    Click a service card above or select manually
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleCreateRequest} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                        Service Type
-                      </label>
-                      <Select
-                        value={newRequest.serviceType}
-                        onValueChange={(value) => setNewRequest((prev) => ({ ...prev, serviceType: value }))}
-                      >
-                        <SelectTrigger className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600">
-                          <SelectValue placeholder="Select emergency service" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fire">🔥 Fire Department</SelectItem>
-                          <SelectItem value="police">👮 Police Service</SelectItem>
-                          <SelectItem value="medical">🚑 Medical Emergency</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                        Priority Level
-                      </label>
-                      <Select
-                        value={newRequest.priority}
-                        onValueChange={(value) =>
-                          setNewRequest((prev) => ({
-                            ...prev,
-                            priority: value as "low" | "medium" | "high" | "critical",
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600">
-                          <SelectValue placeholder="Select priority level" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">🟢 Low Priority</SelectItem>
-                          <SelectItem value="medium">🟡 Medium Priority</SelectItem>
-                          <SelectItem value="high">🟠 High Priority</SelectItem>
-                          <SelectItem value="critical">🔴 Critical Emergency</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                        Description
-                      </label>
-                      <Textarea
-                        placeholder="Describe the emergency situation..."
-                        value={newRequest.description}
-                        onChange={(e) => setNewRequest((prev) => ({ ...prev, description: e.target.value }))}
-                        rows={3}
-                        className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"
-                      />
-                    </div>
-
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center text-sm text-blue-800 dark:text-blue-300">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        Current Location: {currentLocation.address}
+              {/* Left Column - Service Selection and Form */}
+              <div className="space-y-6">
+                {/* Emergency Hotline */}
+                <Card className="border-red-200 bg-red-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-3">
+                      <Phone className="w-6 h-6 text-red-600" />
+                      <div>
+                        <p className="font-semibold text-red-800">Emergency Hotline</p>
+                        <p className="text-red-700">020-2222-181 (Available 24/7)</p>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
 
-                    <Button
-                      type="submit"
-                      className="w-full bg-red-600 hover:bg-red-700 text-white"
-                      disabled={!newRequest.serviceType || isCreatingRequest}
-                    >
-                      {isCreatingRequest ? "Requesting Help..." : "Request Emergency Service"}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+                {/* Service Selection */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      <span>Select Emergency Service</span>
+                    </CardTitle>
+                    <CardDescription>Choose the type of emergency service you need</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {services.map((service) => {
+                      const Icon = service.icon
+                      const isSelected = selectedService === service.id
+                      return (
+                        <div
+                          key={service.id}
+                          className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                            isSelected
+                              ? `${service.borderColor} ${service.bgColor}`
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                          onClick={() => handleServiceSelect(service.id)}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className={`p-2 rounded-lg ${service.color}`}>
+                              <Icon className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-gray-900">{service.name}</h3>
+                              <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                            </div>
+                            {isSelected && <Badge className={service.color}>Selected</Badge>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </CardContent>
+                </Card>
 
-              {/* Live Map */}
-              <div className="space-y-4">
-                <MapView userLocation={currentLocation} isTracking={false} />
+                {/* Request Form */}
+                {selectedService && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Emergency Request Details</CardTitle>
+                      <CardDescription>Provide details about your emergency</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Location Display */}
+                      <div className="space-y-2">
+                        <Label className="flex items-center space-x-2">
+                          <MapPin className="w-4 h-4" />
+                          <span>Your Location</span>
+                        </Label>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-600">{location ? location.address : "Getting location..."}</p>
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description of Emergency</Label>
+                        <Textarea
+                          id="description"
+                          placeholder="Please describe the emergency situation in detail..."
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          rows={4}
+                        />
+                      </div>
+
+                      {/* Priority */}
+                      <div className="space-y-2">
+                        <Label htmlFor="priority">Priority Level</Label>
+                        <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low - Non-urgent</SelectItem>
+                            <SelectItem value="medium">Medium - Moderate urgency</SelectItem>
+                            <SelectItem value="high">High - Urgent</SelectItem>
+                            <SelectItem value="critical">Critical - Life threatening</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Error/Success Messages */}
+                      {error && (
+                        <Alert variant="destructive">
+                          <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      {success && (
+                        <Alert>
+                          <CheckCircle className="h-4 w-4" />
+                          <AlertDescription>{success}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      {/* Submit Button */}
+                      <Button
+                        onClick={handleSubmitRequest}
+                        disabled={isSubmitting || !location}
+                        className="w-full"
+                        size="lg"
+                      >
+                        {isSubmitting ? "Submitting Request..." : "Submit Emergency Request"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right Column - Map and Active Request */}
+              <div className="space-y-6">
+                {/* Active Request Status */}
+                {activeRequest && (
+                  <Card className="border-green-200 bg-green-50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2 text-green-800">
+                        <CheckCircle className="w-5 h-5" />
+                        <span>Active Emergency Request</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="font-medium text-green-800">Request ID</p>
+                          <p className="text-green-700">{activeRequest.id.slice(0, 8)}...</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-green-800">Status</p>
+                          <Badge variant="secondary">{activeRequest.status}</Badge>
+                        </div>
+                        <div>
+                          <p className="font-medium text-green-800">Service Type</p>
+                          <p className="text-green-700 capitalize">{activeRequest.serviceType}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-green-800">Priority</p>
+                          <p className="text-green-700 capitalize">{activeRequest.priority}</p>
+                        </div>
+                      </div>
+
+                      {activeRequest.responderName && (
+                        <div className="pt-2 border-t border-green-200">
+                          <p className="font-medium text-green-800">Assigned Responder</p>
+                          <p className="text-green-700">{activeRequest.responderName}</p>
+                          {activeRequest.responderPhone && (
+                            <p className="text-green-700">{activeRequest.responderPhone}</p>
+                          )}
+                          {activeRequest.estimatedArrival && (
+                            <p className="text-green-700 flex items-center space-x-1">
+                              <Clock className="w-4 h-4" />
+                              <span>ETA: {activeRequest.estimatedArrival}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <Button variant="outline" onClick={handleCancelRequest} className="w-full bg-transparent">
+                        Cancel Request
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Map View */}
+                {(location || activeRequest) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Navigation className="w-5 h-5" />
+                        <span>Location Map</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <MapView
+                        location={location}
+                        emergencyRequest={activeRequest}
+                        className="h-96 w-full rounded-lg"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </div>
         ) : (
-          /* Active Request Tracking */
-          <div className="max-w-6xl mx-auto space-y-6">
-            <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                    <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
-                    Emergency Request
-                  </CardTitle>
-                  <Badge
-                    className={`${activeRequest.status === "pending" ? "bg-yellow-500" : "bg-green-500"} text-white`}
-                  >
-                    {activeRequest.status === "pending" ? "Finding Responder..." : "Responder En Route"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">Request Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center">
-                        <span className="w-20 text-gray-600 dark:text-gray-400">Service:</span>
-                        <Badge className={getServiceColor(activeRequest.serviceType)}>
-                          {activeRequest.serviceType.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-20 text-gray-600 dark:text-gray-400">Priority:</span>
-                        <Badge variant={activeRequest.priority === "critical" ? "destructive" : "secondary"}>
-                          {activeRequest.priority?.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-20 text-gray-600 dark:text-gray-400">Time:</span>
-                        <span className="dark:text-gray-300">{activeRequest.createdAt.toLocaleTimeString()}</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="w-20 text-gray-600 dark:text-gray-400">Details:</span>
-                        <span className="dark:text-gray-300">{activeRequest.description}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {activeRequest.status === "active" && activeRequest.responderName && (
-                    <div>
-                      <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">Responder Information</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center">
-                          <span className="w-20 text-gray-600 dark:text-gray-400">Name:</span>
-                          <span className="font-medium dark:text-gray-300">{activeRequest.responderName}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Phone className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                          <span className="w-16 text-gray-600 dark:text-gray-400">Phone:</span>
-                          <a
-                            href={`tel:${activeRequest.responderPhone}`}
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            {activeRequest.responderPhone}
-                          </a>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                          <span className="w-16 text-gray-600 dark:text-gray-400">ETA:</span>
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            {activeRequest.estimatedArrival}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Live Tracking Map */}
-            <MapView
-              userLocation={currentLocation}
-              responderLocation={responderLocation}
-              isTracking={activeRequest.status === "active"}
-            />
-
-            <div className="flex gap-4">
-              <Button variant="outline" className="flex-1 bg-transparent" onClick={() => window.location.reload()}>
-                Cancel Request
-              </Button>
-              {activeRequest.responderPhone && (
-                <Button className="flex-1 bg-green-600 hover:bg-green-700">
-                  <Phone className="w-4 h-4 mr-2" />
-                  Call Responder
-                </Button>
-              )}
-            </div>
-          </div>
+          <ResponderDashboard user={user} onLogout={handleLogout} />
         )}
-      </main>
-    </div>
+        <Toaster />
+      </div>
+    </ThemeProvider>
   )
 }

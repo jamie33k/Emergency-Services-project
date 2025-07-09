@@ -8,54 +8,33 @@ export interface User {
   serviceType?: "fire" | "police" | "medical"
 }
 
-export interface Location {
-  lat: number
-  lng: number
-  address: string
-}
-
 export interface EmergencyRequest {
   id: string
-  clientId: string
-  clientName: string
-  clientPhone: string
-  serviceType: "fire" | "police" | "medical"
-  location: Location
+  client_id: string
+  client_name: string
+  client_phone: string
+  service_type: "fire" | "police" | "medical"
+  location_lat: number
+  location_lng: number
+  location_address: string
   description: string
   priority: "low" | "medium" | "high" | "critical"
   status: "pending" | "active" | "completed" | "cancelled"
-  responderName?: string
-  responderPhone?: string
-  responderLocation?: {
-    lat: number
-    lng: number
-  }
-  estimatedArrival?: string
-  createdAt: Date
-  updatedAt?: Date
-  completedAt?: Date
-  incidentReport?: {
-    status: string
-    notes: string
-  }
+  responder_id?: string
+  responder_name?: string
+  responder_phone?: string
+  estimated_arrival?: string
+  created_at: string
+  updated_at: string
 }
 
-export interface ServiceProvider {
-  id: string
-  name: string
-  serviceType: "fire" | "police" | "medical"
-  phone: string
-  location: Location
-  isAvailable: boolean
-  responseTime: number
+export interface LoginCredentials {
+  username: string
+  password: string
 }
 
-export interface EmergencyContact {
-  id: string
-  serviceType: "fire" | "police" | "medical"
-  name: string
-  phone: string
-  location?: string
-  responseTime?: number
-  isActive: boolean
+export interface ApiResponse<T> {
+  success: boolean
+  data?: T
+  error?: string
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import DatabaseService from "@/lib/db"
 
-export async function GET() {
+export async function POST() {
   try {
     const result = await DatabaseService.initializeDatabase()
     return NextResponse.json(result)

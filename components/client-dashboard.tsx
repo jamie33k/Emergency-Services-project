@@ -1,267 +1,338 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MapPin, Phone, Clock, AlertTriangle } from "lucide-react"
-import type { User, EmergencyRequest } from "../types/emergency"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Phone, MapPin, Clock, UserIcon, LogOut, Plus, AlertTriangle } from "lucide-react"
+import IncidentReportModal from "./incident-report-modal"
+import MapView from "./map-view"
+import { ThemeToggle } from "./theme-toggle"
 
-interface ClientDashboardProps {
-  user: User
-  onCreateRequest: (requestData: Partial<EmergencyRequest>) => void
-  activeRequest: EmergencyRequest | null
+interface ClientUser {
+  id: string
+  username: string
+  name: string
+  email: string
+  phone: string
+  userType: "client" | "responder"
+  serviceType?: "fire" | "police" | "medical"
 }
 
-export default function ClientDashboard({ user, onCreateRequest, activeRequest }: ClientDashboardProps) {
-  const [isCreatingRequest, setIsCreatingRequest] = useState(false)
-  const [newRequest, setNewRequest] = useState({
-    serviceType: "",
-    description: "",
-    priority: "medium" as const,
-  })
+interface EmergencyRequest {
+  id: string
+  client_id: string
+  client_name: string
+  client_phone: string
+  service_type: "fire" | "police" | "medical"
+  location_lat: number
+  location_lng: number
+  location_address: string
+  description: string
+  priority: "low" | "medium" | "high" | "critical"
+  status: "pending" | "active" | "completed" | "cancelled"
+  responder_id?: string
+  responder_name?: string
+  responder_phone?: string
+  estimated_arrival?: string
+  created_at: string
+  updated_at: string
+}
 
-  const handleCreateRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsCreatingRequest(true)
+interface ClientDashboardProps {
+  user: ClientUser
+  onLogout: () => void
+}
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+export default function ClientDashboard({ user, onLogout }: ClientDashboardProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [requests, setRequests] = useState<EmergencyRequest[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-    const requestData: Partial<EmergencyRequest> = {
-      clientId: user.id,
-      clientName: user.name,
-      clientPhone: user.phone,
-      serviceType: newRequest.serviceType as "fire" | "police" | "medical",
-      location: {
-        lat: -1.2921,
-        lng: 36.8219,
-        address: "Nairobi CBD, Kenya",
-      },
-      description: newRequest.description,
-      priority: newRequest.priority,
+  const handleSubmitRequest = async (requestData: any) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/emergency", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...requestData,
+          client_id: user.id,
+          client_name: user.name,
+          client_phone: user.phone,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setRequests((prev) => [data.request, ...prev])
+        setIsModalOpen(false)
+      } else {
+        setError(data.error || "Failed to submit request")
+      }
+    } catch (error) {
+      console.error("Submit request error:", error)
+      setError("Network error. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    onCreateRequest(requestData)
-    setIsCreatingRequest(false)
   }
 
-  if (activeRequest) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center">
-                <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
-                Emergency Request
-              </CardTitle>
-              <Badge className={activeRequest.status === "pending" ? "bg-yellow-500" : "bg-green-500"}>
-                {activeRequest.status === "pending" ? "Finding Responder..." : "Responder En Route"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold mb-2">Request Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center">
-                    <span className="w-20">Service:</span>
-                    <Badge>{activeRequest.serviceType.toUpperCase()}</Badge>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="w-20">Priority:</span>
-                    <Badge variant={activeRequest.priority === "critical" ? "destructive" : "secondary"}>
-                      {activeRequest.priority?.toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="w-20">Time:</span>
-                    <span>{activeRequest.createdAt.toLocaleTimeString()}</span>
-                  </div>
-                </div>
-              </div>
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "critical":
+        return "bg-red-500"
+      case "high":
+        return "bg-orange-500"
+      case "medium":
+        return "bg-yellow-500"
+      case "low":
+        return "bg-green-500"
+      default:
+        return "bg-gray-500"
+    }
+  }
 
-              {activeRequest.status === "active" && activeRequest.responderName && (
-                <div>
-                  <h3 className="font-semibold mb-2">Responder Information</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center">
-                      <span className="w-20">Name:</span>
-                      <span className="font-medium">{activeRequest.responderName}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Phone className="w-4 h-4 mr-1" />
-                      <span className="w-16">Phone:</span>
-                      <a href={`tel:${activeRequest.responderPhone}`} className="text-blue-600 hover:underline">
-                        {activeRequest.responderPhone}
-                      </a>
-                    </div>
-                    <div className="flex items-center">
-                      <Clock className="w-4 h-4 mr-1" />
-                      <span className="w-16">ETA:</span>
-                      <span className="font-medium text-green-600">{activeRequest.estimatedArrival}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-500"
+      case "active":
+        return "bg-blue-500"
+      case "completed":
+        return "bg-green-500"
+      case "cancelled":
+        return "bg-red-500"
+      default:
+        return "bg-gray-500"
+    }
+  }
 
-        <div className="flex gap-4">
-          <Button variant="outline" className="flex-1 bg-transparent" onClick={() => window.location.reload()}>
-            Cancel Request
-          </Button>
-          {activeRequest.responderPhone && (
-            <Button className="flex-1">
-              <Phone className="w-4 h-4 mr-2" />
-              Call Responder
-            </Button>
-          )}
-        </div>
-      </div>
-    )
+  const getServiceIcon = (serviceType: string) => {
+    switch (serviceType) {
+      case "fire":
+        return "🚒"
+      case "police":
+        return "🚔"
+      case "medical":
+        return "🚑"
+      default:
+        return "🚨"
+    }
   }
 
   return (
-    <div className="space-y-6">
-      {/* Service Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="group hover:shadow-lg transition-shadow">
-          <CardHeader className="pb-3">
-            <div className="w-full h-32 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg mb-4 flex items-center justify-center">
-              <span className="text-4xl">🔥</span>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-lg">E</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">EmergencyConnect</h1>
+                <p className="text-sm text-muted-foreground">Client Dashboard</p>
+              </div>
             </div>
-            <CardTitle className="text-red-600">Fire Brigade</CardTitle>
-            <CardDescription>Professional fire emergency response team available 24/7</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center text-sm text-gray-600">
-              <Phone className="w-4 h-4 mr-2" />
-              Direct: +254-700-123456
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <div className="flex items-center space-x-2">
+                <UserIcon className="h-4 w-4" />
+                <span className="font-medium">{user.name}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={onLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="w-4 h-4 mr-2" />
-              Response Time: 5-8 minutes
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </header>
 
-        <Card className="group hover:shadow-lg transition-shadow">
-          <CardHeader className="pb-3">
-            <div className="w-full h-32 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg mb-4 flex items-center justify-center">
-              <span className="text-4xl">👮</span>
-            </div>
-            <CardTitle className="text-blue-600">Police Service</CardTitle>
-            <CardDescription>Rapid police response for security and law enforcement</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center text-sm text-gray-600">
-              <Phone className="w-4 h-4 mr-2" />
-              Direct: +254-700-789012
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="w-4 h-4 mr-2" />
-              Response Time: 3-6 minutes
-            </div>
-          </CardContent>
-        </Card>
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Emergency Request Button */}
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-4">
+                  <AlertTriangle className="h-12 w-12 text-red-600 mx-auto" />
+                  <div>
+                    <h2 className="text-xl font-bold text-red-900">Emergency Assistance</h2>
+                    <p className="text-red-700">Need immediate help? Report an emergency now.</p>
+                  </div>
+                  <Button
+                    size="lg"
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    Report Emergency
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="group hover:shadow-lg transition-shadow">
-          <CardHeader className="pb-3">
-            <div className="w-full h-32 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg mb-4 flex items-center justify-center">
-              <span className="text-4xl">🚑</span>
-            </div>
-            <CardTitle className="text-green-600">Medical Emergency</CardTitle>
-            <CardDescription>Advanced life support and emergency medical care</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center text-sm text-gray-600">
-              <Phone className="w-4 h-4 mr-2" />
-              Direct: +254-700-345678
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="w-4 h-4 mr-2" />
-              Response Time: 4-7 minutes
-            </div>
-          </CardContent>
-        </Card>
+            {/* Error Alert */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Emergency Requests */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Emergency Requests</CardTitle>
+                <CardDescription>Track the status of your emergency requests</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {requests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No emergency requests yet</p>
+                    <p className="text-sm">Click "Report Emergency" to submit a request</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {requests.map((request) => (
+                      <div key={request.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-2xl">{getServiceIcon(request.service_type)}</span>
+                            <div>
+                              <h3 className="font-semibold capitalize">{request.service_type} Emergency</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(request.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Badge className={`${getPriorityColor(request.priority)} text-white`}>
+                              {request.priority}
+                            </Badge>
+                            <Badge className={`${getStatusColor(request.status)} text-white`}>{request.status}</Badge>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{request.location_address}</span>
+                          </div>
+                          {request.responder_name && (
+                            <div className="flex items-center space-x-2">
+                              <UserIcon className="h-4 w-4 text-muted-foreground" />
+                              <span>Responder: {request.responder_name}</span>
+                            </div>
+                          )}
+                          {request.responder_phone && (
+                            <div className="flex items-center space-x-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span>{request.responder_phone}</span>
+                            </div>
+                          )}
+                          {request.estimated_arrival && (
+                            <div className="flex items-center space-x-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <span>ETA: {request.estimated_arrival}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t">
+                          <p className="text-sm">
+                            <strong>Description:</strong> {request.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* User Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <UserIcon className="h-4 w-4 text-muted-foreground" />
+                  <span>{user.name}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{user.phone}</span>
+                </div>
+                <Separator />
+                <div className="text-sm text-muted-foreground">
+                  <p>Keep your contact information updated for emergency responses.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Map */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Location</CardTitle>
+                <CardDescription>Your current location for emergency services</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MapView />
+              </CardContent>
+            </Card>
+
+            {/* Emergency Contacts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Emergency Contacts</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span>Fire Department</span>
+                  <span className="font-mono">999</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Police</span>
+                  <span className="font-mono">999</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Medical Emergency</span>
+                  <span className="font-mono">999</span>
+                </div>
+                <Separator />
+                <div className="text-sm text-muted-foreground">
+                  <p>For immediate life-threatening emergencies, call 999 directly.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Request Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Request Emergency Service</CardTitle>
-          <CardDescription>Select the type of emergency and provide details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleCreateRequest} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Service Type</label>
-              <Select
-                value={newRequest.serviceType}
-                onValueChange={(value) => setNewRequest((prev) => ({ ...prev, serviceType: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select emergency service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fire">🔥 Fire Department</SelectItem>
-                  <SelectItem value="police">👮 Police Service</SelectItem>
-                  <SelectItem value="medical">🚑 Medical Emergency</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Priority Level</label>
-              <Select
-                value={newRequest.priority}
-                onValueChange={(value) =>
-                  setNewRequest((prev) => ({
-                    ...prev,
-                    priority: value as "low" | "medium" | "high" | "critical",
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">🟢 Low Priority</SelectItem>
-                  <SelectItem value="medium">🟡 Medium Priority</SelectItem>
-                  <SelectItem value="high">🟠 High Priority</SelectItem>
-                  <SelectItem value="critical">🔴 Critical Emergency</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <Textarea
-                placeholder="Describe the emergency situation..."
-                value={newRequest.description}
-                onChange={(e) => setNewRequest((prev) => ({ ...prev, description: e.target.value }))}
-                rows={3}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-red-600 hover:bg-red-700"
-              disabled={!newRequest.serviceType || isCreatingRequest}
-            >
-              {isCreatingRequest ? "Requesting Help..." : "Request Emergency Service"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      {/* Incident Report Modal */}
+      <IncidentReportModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSubmitRequest}
+        isLoading={isLoading}
+      />
     </div>
   )
 }

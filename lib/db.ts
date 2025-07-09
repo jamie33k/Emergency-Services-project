@@ -78,7 +78,7 @@ export class DatabaseService {
 
       // Insert demo users if they don't exist
       const existingUsers = await sql`SELECT COUNT(*) as count FROM users`
-      if (existingUsers[0].count === "0") {
+      if (Number(existingUsers[0].count) === 0) {
         await this.insertDemoUsers()
       }
 
@@ -89,70 +89,83 @@ export class DatabaseService {
     }
   }
 
-  // Insert demo users
+  // Insert demo users with proper UUIDs
   static async insertDemoUsers() {
     const demoUsers = [
       // Clients
       {
-        username: "JohnDoe",
-        password: "JohnDoe",
-        name: "John Doe",
-        email: "john.doe@example.com",
-        phone: "+254-700-111222",
+        id: "550e8400-e29b-41d4-a716-446655440001",
+        username: "PeterNjiru",
+        password: "PeterNjiru",
+        name: "Peter Njiru",
+        email: "peter.njiru@example.com",
+        phone: "+254798578853",
         user_type: "client",
+        service_type: null,
       },
       {
-        username: "JaneSmith",
-        password: "JaneSmith",
-        name: "Jane Smith",
-        email: "jane.smith@example.com",
-        phone: "+254-700-333444",
+        id: "550e8400-e29b-41d4-a716-446655440002",
+        username: "MichealWekesa",
+        password: "MichealWekesa",
+        name: "Micheal Wekesa",
+        email: "micheal.wekesa@example.com",
+        phone: "+254798578854",
         user_type: "client",
+        service_type: null,
       },
       {
-        username: "MikeJohnson",
-        password: "MikeJohnson",
-        name: "Mike Johnson",
-        email: "mike.johnson@example.com",
-        phone: "+254-700-555666",
+        id: "550e8400-e29b-41d4-a716-446655440003",
+        username: "TeejanAmusala",
+        password: "TeejanAmusala",
+        name: "Teejan Amusala",
+        email: "teejan.amusala@example.com",
+        phone: "+254798578855",
         user_type: "client",
+        service_type: null,
       },
       // Responders
       {
+        id: "550e8400-e29b-41d4-a716-446655440004",
         username: "MarkMaina",
         password: "MarkMaina",
         name: "Mark Maina",
         email: "mark.maina@fire.gov.ke",
-        phone: "+254-700-123456",
+        phone: "+254700123456",
         user_type: "responder",
         service_type: "fire",
       },
       {
+        id: "550e8400-e29b-41d4-a716-446655440005",
         username: "SashaMunene",
         password: "SashaMunene",
         name: "Sasha Munene",
         email: "sasha.munene@police.gov.ke",
-        phone: "+254-700-789012",
+        phone: "+254700789012",
         user_type: "responder",
         service_type: "police",
       },
       {
+        id: "550e8400-e29b-41d4-a716-446655440006",
         username: "AliHassan",
         password: "AliHassan",
         name: "Ali Hassan",
         email: "ali.hassan@health.gov.ke",
-        phone: "+254-700-345678",
+        phone: "+254700345678",
         user_type: "responder",
         service_type: "medical",
       },
     ]
 
     for (const user of demoUsers) {
-      await sql`
-        INSERT INTO users (username, password, name, email, phone, user_type, service_type)
-        VALUES (${user.username}, ${user.password}, ${user.name}, ${user.email}, ${user.phone}, ${user.user_type}, ${user.service_type || null})
-        ON CONFLICT (username) DO NOTHING
-      `
+      try {
+        await sql`
+          INSERT INTO users (id, username, password, name, email, phone, user_type, service_type)
+          VALUES (${user.id}::uuid, ${user.username}, ${user.password}, ${user.name}, ${user.email}, ${user.phone}, ${user.user_type}, ${user.service_type})
+          ON CONFLICT (username) DO NOTHING
+        `
+      } catch (error) {
+        console.error(`Error inserting user ${user.username}:`, error)
+      }
     }
   }
 
@@ -168,13 +181,18 @@ export class DatabaseService {
       return result[0] || null
     } catch (error) {
       console.error("Authentication error:", error)
-      return null
+      throw error
     }
   }
 
   // Create emergency request
   static async createEmergencyRequest(requestData: Partial<EmergencyRequest>): Promise<EmergencyRequest | null> {
     try {
+      // Validate that client_id is a valid UUID
+      if (!requestData.client_id) {
+        throw new Error("client_id is required")
+      }
+
       const result = await sql`
         INSERT INTO emergency_requests (
           client_id, client_name, client_phone, service_type,
@@ -182,9 +200,15 @@ export class DatabaseService {
           description, priority
         )
         VALUES (
-          ${requestData.client_id}, ${requestData.client_name}, ${requestData.client_phone},
-          ${requestData.service_type}, ${requestData.location_lat}, ${requestData.location_lng},
-          ${requestData.location_address}, ${requestData.description}, ${requestData.priority}
+          ${requestData.client_id}::uuid, 
+          ${requestData.client_name}, 
+          ${requestData.client_phone},
+          ${requestData.service_type}, 
+          ${requestData.location_lat}, 
+          ${requestData.location_lng},
+          ${requestData.location_address}, 
+          ${requestData.description}, 
+          ${requestData.priority}
         )
         RETURNING *
       `
@@ -201,7 +225,7 @@ export class DatabaseService {
     try {
       const result = await sql`
         SELECT * FROM emergency_requests 
-        WHERE id = ${id}
+        WHERE id = ${id}::uuid
         LIMIT 1
       `
 
@@ -218,20 +242,43 @@ export class DatabaseService {
     updates: Partial<EmergencyRequest>,
   ): Promise<EmergencyRequest | null> {
     try {
-      const setClause = Object.keys(updates)
-        .filter((key) => updates[key as keyof EmergencyRequest] !== undefined)
-        .map((key) => `${key} = $${key}`)
-        .join(", ")
+      // Build the SET clause dynamically
+      const updateFields = []
+      const values = []
 
-      if (!setClause) return null
+      if (updates.status !== undefined) {
+        updateFields.push(`status = $${updateFields.length + 2}`)
+        values.push(updates.status)
+      }
+      if (updates.responder_id !== undefined) {
+        updateFields.push(`responder_id = $${updateFields.length + 2}::uuid`)
+        values.push(updates.responder_id)
+      }
+      if (updates.responder_name !== undefined) {
+        updateFields.push(`responder_name = $${updateFields.length + 2}`)
+        values.push(updates.responder_name)
+      }
+      if (updates.responder_phone !== undefined) {
+        updateFields.push(`responder_phone = $${updateFields.length + 2}`)
+        values.push(updates.responder_phone)
+      }
+      if (updates.estimated_arrival !== undefined) {
+        updateFields.push(`estimated_arrival = $${updateFields.length + 2}`)
+        values.push(updates.estimated_arrival)
+      }
 
-      const result = await sql`
+      if (updateFields.length === 0) {
+        return null
+      }
+
+      const query = `
         UPDATE emergency_requests 
-        SET ${sql.unsafe(setClause)}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ${id}
+        SET ${updateFields.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1::uuid
         RETURNING *
       `
 
+      const result = await sql.unsafe(query, [id, ...values])
       return result[0] || null
     } catch (error) {
       console.error("Update request error:", error)
